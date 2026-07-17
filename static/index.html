@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Compass</title>
+    <style>
+        :root {
+            --bg: #0a0b0f;
+            --surface: #13151c;
+            --surface-hover: #1a1d27;
+            --border: #252a38;
+            --border-hover: #353b4d;
+            --text: #e8eaf0;
+            --text-muted: #7b829d;
+            --text-dim: #4a5068;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --accent-dim: rgba(99,102,241,0.1);
+            --success: #22c55e;
+            --success-dim: rgba(34,197,94,0.1);
+            --warning: #f59e0b;
+            --warning-dim: rgba(245,158,11,0.1);
+            --danger: #ef4444;
+            --danger-dim: rgba(239,68,68,0.1);
+            --radius: 12px;
+            --radius-sm: 8px;
+            --shadow: 0 8px 32px rgba(0,0,0,0.4);
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 880px;
+            margin: 0 auto;
+            padding: 48px 24px;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        header h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 1.05rem;
+            max-width: 420px;
+            margin: 0 auto;
+        }
+
+        /* Input Section */
+        .input-section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px;
+            margin-bottom: 28px;
+            box-shadow: var(--shadow);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 24px;
+            padding: 4px;
+            background: var(--bg);
+            border-radius: var(--radius-sm);
+            width: fit-content;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .tab.active {
+            background: var(--surface-hover);
+            color: var(--text);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .tab:hover:not(.active) {
+            color: var(--text);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        input[type="url"], textarea {
+            flex: 1;
+            padding: 14px 18px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 1rem;
+            font-family: inherit;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        input[type="url"]::placeholder, textarea::placeholder {
+            color: var(--text-dim);
+        }
+
+        input[type="url"]:focus, textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-dim);
+        }
+
+        textarea {
+            min-height: 220px;
+            resize: vertical;
+            line-height: 1.6;
+        }
+
+        .btn {
+            padding: 14px 28px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--surface-hover);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+            color: var(--text);
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 48px;
+        }
+
+        .loading.active { display: block; }
+
+        .spinner {
+            width: 44px;
+            height: 44px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading p {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        .loading .sub {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-top: 6px;
+        }
+
+        /* Error */
+        .error {
+            display: none;
+            background: var(--danger-dim);
+            border: 1px solid var(--danger);
+            color: #fca5a5;
+            padding: 16px 20px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 24px;
+            font-size: 0.95rem;
+        }
+
+        .error.active { display: block; }
+
+        /* Results */
+        .result {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .result.active { display: block; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Score Card */
+        .score-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 32px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+        }
+
+        .score-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            gap: 20px;
+        }
+
+        .score-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .score-ring {
+            width: 84px;
+            height: 84px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.9rem;
+            font-weight: 800;
+            color: white;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .score-ring::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            padding: 4px;
+            background: conic-gradient(var(--ring-color) var(--ring-deg), var(--border) var(--ring-deg));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+        }
+
+        .score-info h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+            line-height: 1.3;
+        }
+
+        .score-info .company {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        .recommendation-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            flex-shrink: 0;
+        }
+
+        .rec-strong_apply { background: var(--success-dim); color: var(--success); }
+        .rec-apply { background: var(--accent-dim); color: var(--accent-hover); }
+        .rec-consider { background: var(--warning-dim); color: var(--warning); }
+        .rec-skip { background: var(--danger-dim); color: var(--danger); }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .detail-item {
+            padding: 14px 16px;
+            background: var(--bg);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+        }
+
+        .detail-item label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 6px;
+        }
+
+        .detail-item span {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--text);
+        }
+
+        .reasoning {
+            padding: 16px 20px;
+            background: var(--bg);
+            border-radius: var(--radius-sm);
+            border-left: 3px solid var(--accent);
+            line-height: 1.7;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .reasoning strong { color: var(--text); }
+
+        /* Sections */
+        .section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow);
+        }
+
+        .section h3 {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+
+        .section p {
+            color: var(--text-muted);
+            line-height: 1.7;
+            font-size: 0.95rem;
+        }
+
+        .tag-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tag {
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 0.88rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .tag.requirement { 
+            border-left: 3px solid var(--accent); 
+            color: var(--text);
+        }
+        .tag.nice { 
+            border-left: 3px solid var(--warning); 
+            color: var(--text-muted);
+        }
+        .tag.red { 
+            border-left: 3px solid var(--danger); 
+            background: var(--danger-dim);
+            color: #fca5a5;
+        }
+        .tag.green { 
+            border-left: 3px solid var(--success); 
+            background: var(--success-dim);
+            color: #86efac;
+        }
+
+        .empty-state {
+            color: var(--text-dim);
+            font-style: italic;
+        }
+
+        /* Raw text */
+        .raw-section {
+            margin-top: 16px;
+        }
+
+        .raw-text {
+            display: none;
+            margin-top: 16px;
+            padding: 20px;
+            background: var(--bg);
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            line-height: 1.7;
+            color: var(--text-dim);
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            border: 1px solid var(--border);
+        }
+
+        .raw-text.active { display: block; }
+
+        /* Action bar */
+        .action-bar {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .container { padding: 24px 16px; }
+            header h1 { font-size: 1.7rem; }
+            .input-group { flex-direction: column; }
+            .input-group .btn { width: 100%; justify-content: center; }
+            .score-header { flex-direction: column; align-items: flex-start; }
+            .detail-grid { grid-template-columns: 1fr; }
+            .score-left { width: 100%; }
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">🧭</div>
+                <h1>Job Compass</h1>
+            </div>
+            <p>Paste a job URL or description. Get a match score. Decide in 30 seconds.</p>
+        </header>
+
+        <div class="input-section">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('url')">🔗 Job URL</button>
+                <button class="tab" onclick="switchTab('text')">📝 Paste Text</button>
+            </div>
+
+            <div id="url-input" class="input-group">
+                <input type="url" id="jobUrl" placeholder="https://linkedin.com/jobs/view/..." />
+                <button class="btn" onclick="analyzeUrl()" id="analyzeBtn">
+                    <span>Analyze</span>
+                </button>
+            </div>
+
+            <div id="text-input" class="input-group hidden">
+                <textarea id="jobText" placeholder="Paste the full job description here..."></textarea>
+                <button class="btn" onclick="analyzeText()" id="analyzeTextBtn">
+                    <span>Analyze</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Analyzing job description...</p>
+            <p class="sub">This takes ~10-20 seconds</p>
+        </div>
+
+        <div class="error" id="error"></div>
+
+        <div class="result" id="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+
+        function $(id) { return document.getElementById(id); }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            $('url-input').classList.toggle('hidden', tab !== 'url');
+            $('text-input').classList.toggle('hidden', tab !== 'text');
+        }
+
+        function setLoading(isLoading) {
+            $('loading').classList.toggle('active', isLoading);
+            $('analyzeBtn').disabled = isLoading;
+            $('analyzeTextBtn').disabled = isLoading;
+            $('error').classList.remove('active');
+        }
+
+        function showError(msg) {
+            $('error').textContent = msg;
+            $('error').classList.add('active');
+        }
+
+        function getScoreColor(score) {
+            if (score >= 80) return '#22c55e';
+            if (score >= 60) return '#6366f1';
+            if (score >= 40) return '#f59e0b';
+            return '#ef4444';
+        }
+
+        function getScoreLabel(rec) {
+            const labels = {
+                'strong_apply': 'Strong Apply',
+                'apply': 'Apply',
+                'consider': 'Consider',
+                'skip': 'Skip'
+            };
+            return labels[rec] || rec;
+        }
+
+        function renderTags(items, type) {
+            if (!items || !items.length) {
+                return '<span class="empty-state">None detected</span>';
+            }
+            return items.map(item => `<span class="tag ${type}">${escapeHtml(item)}</span>`).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function renderResult(data) {
+            const color = getScoreColor(data.match_score);
+            const deg = (data.match_score / 100) * 360;
+
+            const html = `
+                <div class="score-card">
+                    <div class="score-header">
+                        <div class="score-left">
+                            <div class="score-ring" style="--ring-color:${color};--ring-deg:${deg}deg;">
+                                ${data.match_score}
+                            </div>
+                            <div class="score-info">
+                                <h2>${escapeHtml(data.title)}</h2>
+                                <div class="company">${escapeHtml(data.company)} · ${escapeHtml(data.location)}</div>
+                            </div>
+                        </div>
+                        <span class="recommendation-badge rec-${data.recommendation}">
+                            ${getScoreLabel(data.recommendation)}
+                        </span>
+                    </div>
+
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <label>Remote</label>
+                            <span>${escapeHtml(data.remote_policy.replace(/_/g, ' '))}</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Seniority</label>
+                            <span>${escapeHtml(data.seniority)}</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Type</label>
+                            <span>${escapeHtml(data.employment_type.replace(/_/g, ' '))}</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Salary</label>
+                            <span>${data.salary_range ? escapeHtml(data.salary_range) : 'Not disclosed'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Visa Sponsor</label>
+                            <span>${data.visa_sponsorship === true ? 'Yes' : data.visa_sponsorship === false ? 'No' : 'Not mentioned'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <label>Visa Mentioned</label>
+                            <span>${data.visa_mentioned ? 'Yes' : 'No'}</span>
+                        </div>
+                    </div>
+
+                    <div class="reasoning">
+                        <strong>Why this score:</strong> ${escapeHtml(data.match_reasoning)}
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>📋 Description</h3>
+                    <p>${escapeHtml(data.description_summary)}</p>
+                </div>
+
+                <div class="section">
+                    <h3>🎯 Key Requirements</h3>
+                    <div class="tag-list">${renderTags(data.key_requirements, 'requirement')}</div>
+                </div>
+
+                <div class="section">
+                    <h3>✨ Nice to Have</h3>
+                    <div class="tag-list">${renderTags(data.nice_to_have, 'nice')}</div>
+                </div>
+
+                <div class="section">
+                    <h3>🚩 Red Flags</h3>
+                    <div class="tag-list">${renderTags(data.red_flags, 'red')}</div>
+                </div>
+
+                <div class="section">
+                    <h3>🟢 Green Flags</h3>
+                    <div class="tag-list">${renderTags(data.green_flags, 'green')}</div>
+                </div>
+
+                <div class="section">
+                    <h3>💪 Strength Matches</h3>
+                    <div class="tag-list">${renderTags(data.strength_matches, 'green')}</div>
+                </div>
+
+                <div class="section">
+                    <h3>⚠️ Gap Concerns</h3>
+                    <div class="tag-list">${renderTags(data.gap_concerns, 'red')}</div>
+                </div>
+
+                <div class="section">
+                    <h3>❓ Questions to Ask</h3>
+                    <div class="tag-list">${renderTags(data.questions_to_ask, 'nice')}</div>
+                </div>
+
+                <div class="section">
+                    <h3>📝 Raw Description</h3>
+                    <div class="raw-text active" style="display:block;">${escapeHtml(data.raw_description)}</div>
+                </div>
+            `;
+
+            const resultEl = $('result');
+            resultEl.innerHTML = html;
+            resultEl.classList.add('active');
+            resultEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        async function analyzeUrl() {
+            const url = $('jobUrl').value.trim();
+            if (!url) {
+                showError('Please enter a job URL');
+                return;
+            }
+
+            setLoading(true);
+            $('result').classList.remove('active');
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/parse`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    throw new Error(data.detail || 'Failed to analyze job');
+                }
+
+                renderResult(data);
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        async function analyzeText() {
+            const text = $('jobText').value.trim();
+            if (!text) {
+                showError('Please paste a job description');
+                return;
+            }
+            if (text.length < 200) {
+                showError('Description too short. Please paste the full job description.');
+                return;
+            }
+
+            setLoading(true);
+            $('result').classList.remove('active');
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/parse-text?text=${encodeURIComponent(text)}`, {
+                    method: 'POST'
+                });
+
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    throw new Error(data.detail || 'Failed to analyze job');
+                }
+
+                renderResult(data);
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        // Enter key support
+        $('jobUrl').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') analyzeUrl();
+        });
+    </script>
+</body>
+</html>
