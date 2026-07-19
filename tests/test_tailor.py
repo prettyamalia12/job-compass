@@ -17,6 +17,7 @@ BASE_RESUME = """
 - Built AI-powered internal tools that reduced operational effort by 80%.
 - Created AI-powered mission creation tool for Freedom Planets quests.
 - Automated AI-powered KYC review tool for onboarding flows.
+- Conducted customer discovery with 15 merchants across three Thai islands.
 - 6 years of product management experience in gaming and AI.
 - Managed cross-functional team of 5 engineers.
 
@@ -165,3 +166,20 @@ async def test_semantic_skill_match(mock_openai, sample_job):
         warning for warning in result.warnings if "Skill not clearly demonstrated" in warning
     ]
     assert not skill_warnings, f"Unexpected skill warnings: {skill_warnings}"
+
+
+@pytest.mark.asyncio
+async def test_bridged_annotation_accepted(mock_openai, sample_job):
+    """Bullets with [BRIDGED: ...] annotations pass validation."""
+    response = _valid_tailor_response()
+    response["tailored_bullets"] = [
+        'Led customer discovery with 15 local merchants, driving consumer marketplace adoption. '
+        '[BRIDGED: "Conducted customer discovery with 15 merchants across three Thai islands."]',
+    ]
+
+    _configure_mock(mock_openai, response)
+
+    result = await tailor_resume(BASE_RESUME, sample_job, gap_bridges=["No explicit beauty industry experience"])
+
+    assert len(result.tailored_bullets) == 1
+    assert "[BRIDGED:" in result.tailored_bullets[0]

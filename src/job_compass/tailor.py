@@ -579,6 +579,7 @@ TAILOR_SYSTEM_PROMPT = """You are an expert resume writer with strict anti-hallu
 You will be given:
 1. A job description (requirements, title, company)
 2. A set of resume chunks that are the ONLY source material you may use
+3. A list of gap concerns to bridge (optional)
 
 Your task is to tailor a resume for this job using ONLY the provided resume chunks. You may NOT invent metrics, companies, dates, products, responsibilities, or skills. You may only reword, reorder, and emphasize existing evidence.
 
@@ -587,7 +588,7 @@ Return ONLY a JSON object with these exact fields:
 {
   "summary": "2-3 sentence professional summary tailored to the job. Only use facts from the provided chunks.",
   "tailored_bullets": [
-    "bullet text that includes [SOURCE: \"exact original chunk text\"] at the end",
+    "bullet text that includes [SOURCE: \"exact original chunk text\"] or [BRIDGED: \"exact original chunk text\"] at the end",
     ...
   ],
   "skills_section": ["skill1", "skill2", ...],
@@ -597,12 +598,21 @@ Return ONLY a JSON object with these exact fields:
 }
 
 RULES:
-- Every tailored_bullet MUST end with [SOURCE: "exact original chunk text"]. The source text must be a verbatim substring from the provided chunks.
+- Every tailored_bullet MUST end with [SOURCE: "exact original chunk text"] or [BRIDGED: "exact original chunk text"]. The source text must be a verbatim substring from the provided chunks.
+- Use [SOURCE: ...] for bullets that directly match the job requirements.
+- Use [BRIDGED: ...] for bullets that reframe existing experience to address a gap concern. The reframed bullet must still be based on the cited original chunk, not invented.
 - The skills_section MUST only contain skills explicitly mentioned in the provided chunks.
 - estimated_ats_score must be an integer 0-100. Estimate how well the tailored resume matches the job requirements based ONLY on the provided evidence.
 - Do NOT invent numbers, percentages, metrics, or outcomes that are not in the chunks.
 - If a requirement has no matching chunk, note it in warnings.
-- Do NOT include markdown formatting in the JSON strings."""
+- Do NOT include markdown formatting in the JSON strings.
+
+GAP BRIDGING:
+If gap concerns are provided, for each gap find the closest relevant resume chunk and reframe it using the job's language and context. Do NOT add new fake experience. Example:
+- Gap: "No explicit beauty/wellness industry experience"
+- Closest chunk: "Conducted customer discovery with 15 merchants across three Thai islands"
+- Reframed: "Led customer discovery with 15 local merchants, driving consumer marketplace adoption [BRIDGED: Conducted customer discovery with 15 merchants across three Thai islands]"
+"""
 
 
 COVER_LETTER_SYSTEM_PROMPT = """You are an honest, senior product manager writing a cover letter.
@@ -770,12 +780,20 @@ async def _call_tailor_llm(
     matches: Dict[str, List[ResumeChunk]],
     tone: str,
     max_length_pages: int,
+    gap_bridges: Optional[List[str]] = None,
 ) -> dict[str, Any]:
     """Call the LLM to tailor the resume."""
     evidence_chunks = _build_evidence_chunks(matches)
     requirements_text = "\n".join(
         f"- {req}" for req in list(job_data.key_requirements) + list(job_data.nice_to_have)
     )
+
+    gap_bridges_text = ""
+    if gap_bridges:
+        gap_bridges_text = (
+            "\n\nGap Concerns to Bridge (reframe closest matching experience):\n"
+            + "\n".join(f"- {gap}" for gap in gap_bridges)
+        )
 
     user_prompt = f"""Tone: {tone}
 
@@ -786,6 +804,7 @@ Description Summary: {job_data.description_summary}
 
 Job Requirements:
 {requirements_text}
+{gap_bridges_text}
 
 Resume Evidence Chunks (ONLY source material you may use):
 {chr(10).join(evidence_chunks)}
@@ -875,16 +894,20 @@ def validate_tailored_resume(
     base_lower = base_resume.lower()
 
     for i, bullet in enumerate(tailored.tailored_bullets):
-        if "[SOURCE:" not in bullet:
-            raise ValueError(f"Tailored bullet {i + 1} missing [SOURCE: annotation")
+        if "[SOURCE:" not in bullet and "[BRIDGED:" not in bullet:
+            raise ValueError(
+                f"Tailored bullet {i + 1} missing [SOURCE: or [BRIDGED: annotation"
+            )
 
-        source_match = re.search(r'\[SOURCE:\s*"([^"]+)"\]', bullet)
+        source_match = re.search(r'\[(?:SOURCE|BRIDGED):\s*"([^"]+)"\]', bullet)
         if not source_match:
-            raise ValueError(f"Tailored bullet {i + 1} has malformed SOURCE annotation")
+            raise ValueError(
+                f"Tailored bullet {i + 1} has malformed SOURCE/BRIDGED annotation"
+            )
 
         source = source_match.group(1)
         if not source.strip():
-            raise ValueError(f"Tailored bullet {i + 1} has empty SOURCE citation")
+            raise ValueError(f"Tailored bullet {i + 1} has empty SOURCE/BRIDGED citation")
 
         if chunks and not _find_source_in_chunks(source, chunks):
             raise ValueError(
@@ -892,11 +915,28 @@ def validate_tailored_resume(
                 f"{source[:50]}"
             )
 
+        # Number validation: BRIDGED bullets may reframe numbers from the cited source
+        if "[BRIDGED:" in bullet:
+            source_chunk_numbers = _extract_numbers(source)
+            bullet_body = bullet[: source_match.start()].strip()
+            body_numbers = _extract_numbers(bullet_body)
+            if body_numbers - source_chunk_numbers:
+                raise ValueError(
+                    f"Tailored bullet {i + 1} has numbers not in cited source: "
+                    f"{sorted(body_numbers - source_chunk_numbers)}"
+                )
+
     for field_name, text in [
         ("tailored_bullets", "\n".join(tailored.tailored_bullets)),
         ("summary", tailored.summary),
         ("cover_letter", tailored.cover_letter),
     ]:
+        # For bullets, only check SOURCE bullets; BRIDGED bullets are checked above
+        if field_name == "tailored_bullets":
+            source_bullets = [
+                b for b in tailored.tailored_bullets if "[BRIDGED:" not in b
+            ]
+            text = "\n".join(source_bullets)
         text_numbers = _extract_numbers(text)
         hallucinated = text_numbers - base_numbers
         if hallucinated:
@@ -929,6 +969,7 @@ async def tailor_resume(
     job_data: JobParseResult,
     tone: str = "professional",
     max_length_pages: int = 2,
+    gap_bridges: Optional[List[str]] = None,
 ) -> TailoredResume:
     """Tailor a resume for a specific job with anti-hallucination guardrails.
 
@@ -937,6 +978,7 @@ async def tailor_resume(
         job_data: Parsed job description.
         tone: Desired tone (professional, casual, formal).
         max_length_pages: Target length in pages.
+        gap_bridges: Gap concerns to bridge by reframing existing experience.
 
     Returns:
         TailoredResume with source-cited bullets and gap warnings.
@@ -950,7 +992,9 @@ async def tailor_resume(
         if not matches.get(requirement):
             warnings.append(f"No resume evidence found for: {requirement}")
 
-    raw_result = await _call_tailor_llm(job_data, matches, tone, max_length_pages)
+    raw_result = await _call_tailor_llm(
+        job_data, matches, tone, max_length_pages, gap_bridges
+    )
 
     original_bullets = [c.text for c in chunks]
     tailored_bullets = raw_result.get("tailored_bullets", [])

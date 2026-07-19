@@ -257,7 +257,13 @@ async def tailor_job_resume(input_data: ResumeTailorInput):
         if cached:
             return cached
 
-        tailored = await tailor_resume(base_resume, job_data, tone, max_length_pages)
+        tailored = await tailor_resume(
+            base_resume,
+            job_data,
+            tone,
+            max_length_pages,
+            input_data.gap_bridges,
+        )
         await _save_tailored_resume(job_url, base_resume_hash, job_data, tailored)
         return tailored
 

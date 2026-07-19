@@ -64,6 +64,10 @@ class ResumeTailorInput(BaseModel):
     base_resume_markdown: str = Field(..., description="Candidate resume in Markdown")
     tone: str = Field("professional", description="Tone of generated content")
     max_length_pages: int = Field(2, ge=1, le=5, description="Target resume length in pages")
+    gap_bridges: List[str] = Field(
+        default_factory=list,
+        description="Gap concerns to bridge by reframing existing experience",
+    )
 
 
 class TailoredResume(BaseModel):

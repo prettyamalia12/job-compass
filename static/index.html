@@ -701,6 +701,66 @@
             .diff-grid { grid-template-columns: 1fr; }
             .tailor-row { flex-direction: column; align-items: stretch; }
         }
+
+        /* Gap Bridging */
+        .gap-checkbox-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .gap-checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--bg);
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .gap-checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--success);
+            cursor: pointer;
+        }
+
+        .gap-checkbox-item.checked {
+            background: var(--success-dim);
+            border-color: var(--success);
+            color: #86efac;
+        }
+
+        .gap-checkbox-item.checked .gap-label::after {
+            content: "Will bridge";
+            margin-left: 10px;
+            font-size: 0.75rem;
+            background: var(--success);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .gap-checkbox-item:not(.checked) {
+            background: var(--surface);
+            border-color: var(--border);
+            color: var(--text-muted);
+        }
+
+        .gap-checkbox-item:not(.checked) .gap-label::after {
+            content: "Dismissed";
+            margin-left: 10px;
+            font-size: 0.75rem;
+            background: var(--border);
+            color: var(--text-muted);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
     </style>
 </head>
 <body>
@@ -749,6 +809,10 @@
             <div class="tailor-input">
                 <label>Paste your base resume (Markdown)</label>
                 <textarea id="baseResume" placeholder="# Oktavia Pretty Amalia\n\n## Experience\n- ..."></textarea>
+            </div>
+            <div class="tailor-input">
+                <label>Gap Concerns (check to bridge)</label>
+                <div class="gap-checkbox-list" id="gapCheckboxList"></div>
             </div>
             <div class="tailor-row">
                 <select id="tailorTone">
@@ -1023,8 +1087,28 @@
                 showError('Please analyze a job first.');
                 return;
             }
+            renderGapCheckboxes();
             $('tailorSection').classList.remove('hidden');
             $('tailorSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function renderGapCheckboxes() {
+            const container = $('gapCheckboxList');
+            const gaps = currentJobData.gap_concerns || [];
+            if (!gaps.length) {
+                container.innerHTML = '<span class="empty-state">No gaps detected</span>';
+                return;
+            }
+            container.innerHTML = gaps.map((gap, i) => `
+                <label class="gap-checkbox-item" data-index="${i}">
+                    <input type="checkbox" value="${escapeHtml(gap)}" onchange="toggleGapCheckbox(this)">
+                    <span class="gap-label">${escapeHtml(gap)}</span>
+                </label>
+            `).join('');
+        }
+
+        function toggleGapCheckbox(checkbox) {
+            checkbox.closest('.gap-checkbox-item').classList.toggle('checked', checkbox.checked);
         }
 
         function setTailorLoading(isLoading) {
@@ -1046,6 +1130,10 @@
             setTailorLoading(true);
             $('tailorResult').classList.remove('active');
 
+            const gapBridges = Array.from(
+                document.querySelectorAll('#gapCheckboxList input[type="checkbox"]:checked')
+            ).map(cb => cb.value);
+
             try {
                 const payload = {
                     job_url: currentJobUrl,
@@ -1053,6 +1141,7 @@
                     base_resume_markdown: baseResume,
                     tone: $('tailorTone').value,
                     max_length_pages: 2,
+                    gap_bridges: gapBridges,
                 };
 
                 const resp = await fetch(`${API_BASE}/api/tailor`, {
@@ -1076,8 +1165,8 @@
         }
 
         function classifyBullet(originalText, tailoredText) {
-            if (!tailoredText || tailoredText.includes('[SOURCE:')) {
-                const clean = tailoredText.replace(/\[SOURCE:\s*"[^"]+"\]/, '').trim();
+            if (!tailoredText || tailoredText.includes('[SOURCE:') || tailoredText.includes('[BRIDGED:')) {
+                const clean = tailoredText.replace(/\[(?:SOURCE|BRIDGED):\s*"[^"]+"\]/, '').trim();
                 if (!clean) return 'red';
             }
             const normOriginal = originalText.toLowerCase().replace(/[^a-z0-9]/g, ' ');
@@ -1099,17 +1188,19 @@
         }
 
         function renderBullet(text, type) {
-            const sourceMatch = text.match(/\[SOURCE:\s*"([^"]+)"\]/);
+            const sourceMatch = text.match(/\[(?:SOURCE|BRIDGED):\s*"([^"]+)"\]/);
             let body = text;
             let source = '';
+            let isBridged = false;
             if (sourceMatch) {
                 body = text.slice(0, sourceMatch.index).trim();
                 source = sourceMatch[1];
+                isBridged = text.includes('[BRIDGED:');
             }
             return `
                 <div class="bullet bullet-${type}">
                     ${escapeHtml(body)}
-                    ${source ? `<span class="bullet-source">Source: ${escapeHtml(source)}</span>` : ''}
+                    ${source ? `<span class="bullet-source">${isBridged ? 'Bridged: ' : 'Source: '}${escapeHtml(source)}</span>` : ''}
                 </div>
             `;
         }
