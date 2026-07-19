@@ -721,6 +721,22 @@
             margin-bottom: 4px;
         }
 
+        .gaps-note {
+            background: var(--warning-dim);
+            border: 1px solid var(--warning);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            color: var(--warning);
+            font-size: 0.92rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .gaps-note:hover {
+            background: rgba(245,158,11,0.18);
+        }
+
         @media (max-width: 640px) {
             .diff-grid { grid-template-columns: 1fr; }
             .tailor-row { flex-direction: column; align-items: stretch; }
@@ -838,7 +854,7 @@
                 <textarea id="baseResume" placeholder="# Oktavia Pretty Amalia\n\n## Experience\n- ..."></textarea>
             </div>
             <div class="tailor-input">
-                <label>Gap Concerns (check to bridge)</label>
+                <label>Gap Concerns — check to bridge, uncheck to dismiss</label>
                 <div class="gap-checkbox-list" id="gapCheckboxList"></div>
             </div>
             <div class="tailor-row">
@@ -1143,6 +1159,37 @@
             checkbox.closest('.gap-checkbox-item').classList.toggle('checked', checkbox.checked);
         }
 
+        function normalizeGapText(text) {
+            return text.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+
+        function addWarningCheckboxes(warnings) {
+            const container = $('gapCheckboxList');
+            const emptyState = container.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            const existing = Array.from(container.querySelectorAll('input[type="checkbox"]'))
+                .map(cb => normalizeGapText(cb.value));
+
+            let added = 0;
+            (warnings || []).forEach(warning => {
+                const norm = normalizeGapText(warning);
+                if (!norm) return;
+                const isDup = existing.some(e => e.includes(norm) || norm.includes(e));
+                if (isDup) return;
+                existing.push(norm);
+                const label = document.createElement('label');
+                label.className = 'gap-checkbox-item';
+                label.innerHTML = `
+                    <input type="checkbox" value="${escapeHtml(warning)}" onchange="toggleGapCheckbox(this)">
+                    <span class="gap-label">${escapeHtml(warning)}</span>
+                `;
+                container.appendChild(label);
+                added += 1;
+            });
+            return added;
+        }
+
         function setTailorLoading(isLoading) {
             $('tailorLoading').classList.toggle('active', isLoading);
             $('tailorBtn').disabled = isLoading;
@@ -1254,22 +1301,17 @@
                 tailoredHtml += tailored ? renderBullet(tailored, type) : '<div class="bullet">—</div>';
             }
 
-            const dismissedGaps = new Set(
-                Array.from(document.querySelectorAll('#gapCheckboxList input[type="checkbox"]:not(:checked)'))
-                    .map(cb => cb.value.toLowerCase())
-            );
+            const warningCount = (data.warnings || []).length;
+            addWarningCheckboxes(data.warnings || []);
 
-            const filteredWarnings = (data.warnings || []).filter(w => {
-                const lower = w.toLowerCase();
-                return !Array.from(dismissedGaps).some(gap => lower.includes(gap));
-            });
-
-            const warnings = filteredWarnings.length
-                ? `<div class="warning-list"><ul>${filteredWarnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
+            const gapsNote = warningCount
+                ? `<div class="gaps-note" onclick="$('gapCheckboxList').scrollIntoView({ behavior: 'smooth', block: 'center' })">
+                    ⚠️ ${warningCount} gap${warningCount > 1 ? 's' : ''} flagged — review <strong>Gap Concerns</strong> above: check to bridge, leave unchecked to dismiss, then re-generate.
+                   </div>`
                 : '';
 
             const html = `
-                ${warnings}
+                ${gapsNote}
 
                 <div class="verification-box">
                     <input type="checkbox" id="verifiedCheckbox" onchange="toggleCopyButtons(this.checked)">
