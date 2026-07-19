@@ -899,13 +899,19 @@ def validate_tailored_resume(
                 f"Tailored bullet {i + 1} missing [SOURCE: or [BRIDGED: annotation"
             )
 
-        source_match = re.search(r'\[(?:SOURCE|BRIDGED):\s*"([^"]+)"\]', bullet)
+        source_match = re.search(r'\[(?:SOURCE|BRIDGED):\s*"(.*)"\]', bullet)
+        if not source_match:
+            # Fallback for unquoted or single-quoted annotations
+            source_match = re.search(
+                r'\[(?:SOURCE|BRIDGED):\s*(?:\'([^\']*)\'|([^\]]+))\]',
+                bullet,
+            )
         if not source_match:
             raise ValueError(
                 f"Tailored bullet {i + 1} has malformed SOURCE/BRIDGED annotation"
             )
 
-        source = source_match.group(1)
+        source = next((g for g in source_match.groups() if g is not None), "")
         if not source.strip():
             raise ValueError(f"Tailored bullet {i + 1} has empty SOURCE/BRIDGED citation")
 
