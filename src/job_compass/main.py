@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Optional
 
 import aiosqlite
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -17,10 +17,12 @@ from job_compass.models import (
     CoverLetterInput,
     JobParseResult,
     JobUrlInput,
+    PdfGenerateInput,
     ResumeTailorInput,
     TailoredResume,
 )
 from job_compass.parser import parse_job_description
+from job_compass.pdf_generator import generate_pdf
 from job_compass.scorer import score_job_fit
 from job_compass.scraper import scrape_job_page
 from job_compass.tailor import (
@@ -289,6 +291,36 @@ async def verify_tailored_resume(input_data: ResumeTailorInput) -> dict[str, boo
     ).split("::")[-1]
     await _mark_verified(input_data.job_url, base_resume_hash)
     return {"verified": True}
+
+
+@app.post("/api/generate-pdf")
+async def generate_pdf_endpoint(input_data: PdfGenerateInput) -> Response:
+    """Generate a PDF resume or cover letter from tailored resume data."""
+    pdf_type = input_data.type
+    if pdf_type not in ("resume", "cover_letter"):
+        raise HTTPException(
+            status_code=400,
+            detail="type must be 'resume' or 'cover_letter'",
+        )
+
+    try:
+        pdf_bytes = generate_pdf(input_data.tailored_resume, pdf_type)
+        filename = (
+            f"tailored_resume_{pdf_type}_"
+            f"{input_data.tailored_resume.created_at[:10].replace('-', '')}.pdf"
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(len(pdf_bytes)),
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {exc}") from exc
 
 
 def main():

@@ -1115,6 +1115,7 @@
         }
 
         function renderTailorResult(data) {
+            window.currentTailoredResume = data;
             const originalBullets = data.original_bullets || [];
             const tailoredBullets = data.tailored_bullets || [];
             const maxLen = Math.max(originalBullets.length, tailoredBullets.length);
@@ -1183,6 +1184,15 @@
                         ${data.estimated_ats_score}
                     </div>
                 </div>
+
+                <div class="action-bar">
+                    <button class="btn btn-secondary" onclick="downloadPdf('resume')" id="pdfResumeBtn" disabled>
+                        📄 Download PDF Resume
+                    </button>
+                    <button class="btn btn-secondary" onclick="downloadPdf('cover_letter')" id="pdfCoverBtn" disabled>
+                        ✉️ Download PDF Cover Letter
+                    </button>
+                </div>
             `;
 
             const resultEl = $('tailorResult');
@@ -1198,6 +1208,50 @@
             document.querySelectorAll('.copy-btn').forEach(btn => {
                 btn.disabled = !enabled;
             });
+            $('pdfResumeBtn').disabled = !enabled;
+            $('pdfCoverBtn').disabled = !enabled;
+        }
+
+        async function downloadPdf(type) {
+            if (!window.currentTailoredResume) {
+                showError('No tailored resume data available.');
+                return;
+            }
+            const btn = type === 'resume' ? $('pdfResumeBtn') : $('pdfCoverBtn');
+            const originalText = btn.textContent;
+            btn.textContent = 'Generating...';
+            btn.disabled = true;
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/generate-pdf`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tailored_resume: window.currentTailoredResume,
+                        type: type
+                    })
+                });
+
+                if (!resp.ok) {
+                    const data = await resp.json().catch(() => ({}));
+                    throw new Error(data.detail || 'PDF generation failed');
+                }
+
+                const blob = await resp.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `tailored_${type}_${new Date().toISOString().slice(0,10)}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
         }
 
         function copySection(target, btn) {

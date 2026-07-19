@@ -99,3 +99,10 @@ class CoverLetterInput(BaseModel):
     job_data: JobParseResult = Field(..., description="Structured job analysis")
     base_resume_markdown: str = Field(..., description="Candidate resume in Markdown")
     tone: str = Field("professional", description="Tone of generated content")
+
+
+class PdfGenerateInput(BaseModel):
+    """Request: generate a PDF from a tailored resume."""
+
+    tailored_resume: TailoredResume = Field(..., description="Tailored resume data")
+    type: str = Field("resume", description="PDF type: resume or cover_letter")
