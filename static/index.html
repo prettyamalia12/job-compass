@@ -1254,8 +1254,18 @@
                 tailoredHtml += tailored ? renderBullet(tailored, type) : '<div class="bullet">—</div>';
             }
 
-            const warnings = data.warnings && data.warnings.length
-                ? `<div class="warning-list"><ul>${data.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
+            const dismissedGaps = new Set(
+                Array.from(document.querySelectorAll('#gapCheckboxList input[type="checkbox"]:not(:checked)'))
+                    .map(cb => cb.value.toLowerCase())
+            );
+
+            const filteredWarnings = (data.warnings || []).filter(w => {
+                const lower = w.toLowerCase();
+                return !Array.from(dismissedGaps).some(gap => lower.includes(gap));
+            });
+
+            const warnings = filteredWarnings.length
+                ? `<div class="warning-list"><ul>${filteredWarnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
                 : '';
 
             const html = `
