@@ -234,16 +234,40 @@
         /* Error */
         .error {
             display: none;
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 680px;
+            width: calc(100% - 32px);
             background: var(--danger-dim);
             border: 1px solid var(--danger);
             color: #fca5a5;
             padding: 16px 20px;
             border-radius: var(--radius-sm);
-            margin-bottom: 24px;
             font-size: 0.95rem;
+            z-index: 1000;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
         }
 
-        .error.active { display: block; }
+        .error.active { display: flex; }
+
+        .error .error-close {
+            background: transparent;
+            border: none;
+            color: #fca5a5;
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .error .error-close:hover {
+            color: white;
+        }
 
         /* Results */
         .result {
@@ -800,7 +824,10 @@
             <p class="sub">This takes ~10-20 seconds</p>
         </div>
 
-        <div class="error" id="error"></div>
+        <div class="error" id="error">
+            <span id="errorText"></span>
+            <button class="error-close" onclick="hideError()" aria-label="Dismiss error">×</button>
+        </div>
 
         <div class="result" id="result"></div>
 
@@ -858,8 +885,13 @@
         }
 
         function showError(msg) {
-            $('error').textContent = msg;
+            $('errorText').textContent = msg;
             $('error').classList.add('active');
+            $('error').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function hideError() {
+            $('error').classList.remove('active');
         }
 
         function getScoreColor(score) {
@@ -1114,6 +1146,7 @@
         function setTailorLoading(isLoading) {
             $('tailorLoading').classList.toggle('active', isLoading);
             $('tailorBtn').disabled = isLoading;
+            if (isLoading) hideError();
         }
 
         async function tailorResume() {
