@@ -896,7 +896,6 @@ def validate_tailored_resume(
         ("tailored_bullets", "\n".join(tailored.tailored_bullets)),
         ("summary", tailored.summary),
         ("cover_letter", tailored.cover_letter),
-        ("changes_made", "\n".join(tailored.changes_made)),
     ]:
         text_numbers = _extract_numbers(text)
         hallucinated = text_numbers - base_numbers

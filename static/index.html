@@ -1186,10 +1186,10 @@
                 </div>
 
                 <div class="action-bar">
-                    <button class="btn btn-secondary" onclick="downloadPdf('resume')" id="pdfResumeBtn" disabled>
+                    <button class="btn btn-secondary" onclick="downloadPdf('resume')" id="pdfResumeBtn">
                         📄 Download PDF Resume
                     </button>
-                    <button class="btn btn-secondary" onclick="downloadPdf('cover_letter')" id="pdfCoverBtn" disabled>
+                    <button class="btn btn-secondary" onclick="downloadPdf('cover_letter')" id="pdfCoverBtn">
                         ✉️ Download PDF Cover Letter
                     </button>
                 </div>
@@ -1208,8 +1208,6 @@
             document.querySelectorAll('.copy-btn').forEach(btn => {
                 btn.disabled = !enabled;
             });
-            $('pdfResumeBtn').disabled = !enabled;
-            $('pdfCoverBtn').disabled = !enabled;
         }
 
         async function downloadPdf(type) {
