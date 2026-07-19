@@ -338,6 +338,231 @@ STOP_WORDS = {
 }
 
 
+CONCEPT_KEYWORDS = {
+    "ai": {
+        "ai",
+        "artificial intelligence",
+        "machine learning",
+        "ml",
+        "llm",
+        "llms",
+        "claude",
+        "chatgpt",
+        "cursor",
+        "gpt",
+        "neural",
+        "deep learning",
+        "nlp",
+        "computer vision",
+        "powered",
+    },
+    "machine learning": {
+        "machine learning",
+        "ml",
+        "ai",
+        "artificial intelligence",
+        "neural",
+        "model",
+        "deep learning",
+        "nlp",
+        "computer vision",
+        "predictive",
+    },
+    "ml": {
+        "ml",
+        "machine learning",
+        "ai",
+        "artificial intelligence",
+        "neural",
+        "model",
+        "deep learning",
+        "nlp",
+        "computer vision",
+    },
+    "gamification": {
+        "gamification",
+        "missions",
+        "quizzes",
+        "rewards",
+        "engagement",
+        "points",
+        "badges",
+        "challenges",
+        "streaks",
+        "leaderboards",
+        "missions",
+    },
+    "growth": {
+        "growth",
+        "experimentation",
+        "a/b testing",
+        "conversion",
+        "retention",
+        "acquisition",
+        "metrics",
+        "funnel",
+        "optimization",
+        "experiments",
+    },
+    "product": {
+        "product",
+        "roadmap",
+        "strategy",
+        "pm",
+        "management",
+        "agile",
+        "scrum",
+        "backlog",
+        "stakeholder",
+        "launch",
+        "lifecycle",
+    },
+    "data": {
+        "data",
+        "analytics",
+        "sql",
+        "metrics",
+        "dashboards",
+        "bi",
+        "business intelligence",
+        "analysis",
+        "insights",
+    },
+    "cloud": {
+        "cloud",
+        "aws",
+        "azure",
+        "gcp",
+        "serverless",
+        "docker",
+        "kubernetes",
+        "devops",
+        "ci/cd",
+    },
+    "api": {
+        "api",
+        "rest",
+        "graphql",
+        "microservices",
+        "integration",
+        "webhook",
+        "sdk",
+    },
+    "testing": {
+        "testing",
+        "qa",
+        "unit",
+        "integration",
+        "e2e",
+        "automation",
+        "tdd",
+        "selenium",
+        "pytest",
+    },
+    "design": {
+        "design",
+        "figma",
+        "sketch",
+        "adobe",
+        "ui",
+        "ux",
+        "prototype",
+        "wireframe",
+        "visual",
+    },
+    "marketing": {
+        "marketing",
+        "seo",
+        "sem",
+        "social media",
+        "campaign",
+        "brand",
+        "content",
+        "email",
+    },
+    "sales": {
+        "sales",
+        "crm",
+        "salesforce",
+        "lead",
+        "pipeline",
+        "revenue",
+        "quota",
+        "negotiation",
+    },
+    "mobile": {
+        "mobile",
+        "android",
+        "ios",
+        "swift",
+        "kotlin",
+        "react native",
+        "flutter",
+    },
+    "web": {
+        "web",
+        "javascript",
+        "typescript",
+        "react",
+        "vue",
+        "angular",
+        "html",
+        "css",
+        "frontend",
+    },
+    "backend": {
+        "backend",
+        "python",
+        "java",
+        "node",
+        "ruby",
+        "php",
+        "go",
+        "rust",
+        "server",
+    },
+    "security": {
+        "security",
+        "encryption",
+        "authentication",
+        "authorization",
+        "oauth",
+        "jwt",
+        "penetration",
+    },
+    "devops": {
+        "devops",
+        "ci/cd",
+        "jenkins",
+        "github actions",
+        "docker",
+        "kubernetes",
+        "terraform",
+        "ansible",
+    },
+    "blockchain": {
+        "blockchain",
+        "web3",
+        "crypto",
+        "nft",
+        "smart contract",
+        "ethereum",
+        "solidity",
+    },
+    "gaming": {
+        "gaming",
+        "game",
+        "player",
+        "liveops",
+        "monetization",
+        "economy",
+        "progression",
+        "level",
+        "quest",
+    },
+}
+
+
 @dataclass
 class ResumeChunk:
     """A chunk of a resume with extracted keywords and optional embedding."""
@@ -595,22 +820,32 @@ def _extract_numbers(text: str) -> set[str]:
     return set(re.findall(r"\d+(?:\.\d+)?%?", text))
 
 
-def _extract_skills(text: str) -> set[str]:
-    """Extract skill-like keywords from text.
+def _extract_skill_tokens(skill: str) -> set[str]:
+    """Extract meaningful tokens from a skill string."""
+    tokens = re.findall(r"[a-zA-Z0-9/+\-]+", skill.lower())
+    return {token for token in tokens if len(token) > 2 and token not in STOP_WORDS}
 
-    Prioritizes comma/newline delimited skills, then extracts adjacent word pairs.
-    """
-    skills: set[str] = set()
-    for raw in re.split(r"[\n,]+", text):
-        skill = raw.strip().strip("-.•·◦*").strip()
-        if len(skill) > 2:
-            skills.add(skill.lower())
-    tokens = re.findall(
-        r"[a-zA-Z][a-zA-Z0-9/+\-]*(?:\s+[a-zA-Z][a-zA-Z0-9/+\-]*)?",
-        text.lower(),
-    )
-    skills.update(token.strip() for token in tokens if len(token.strip()) > 2)
-    return skills
+
+def _skill_keyword_overlap(skill: str, base_resume: str) -> bool:
+    """Check if a skill has significant keyword overlap with the base resume."""
+    skill_tokens = _extract_skill_tokens(skill)
+    if not skill_tokens:
+        return False
+    base_tokens = _extract_keywords(base_resume)
+    overlap = len(skill_tokens & base_tokens)
+    return overlap > 0 and overlap / len(skill_tokens) >= 0.5
+
+
+def _skill_concept_match(skill: str, base_resume: str) -> bool:
+    """Check if a skill's underlying concept is demonstrated in the base resume."""
+    skill_lower = skill.lower()
+    base_lower = base_resume.lower()
+    for concept, keywords in CONCEPT_KEYWORDS.items():
+        if concept in skill_lower:
+            for keyword in keywords:
+                if keyword in base_lower:
+                    return True
+    return False
 
 
 def _find_source_in_chunks(source: str, chunks: List[ResumeChunk]) -> bool:
@@ -625,15 +860,19 @@ def validate_tailored_resume(
     base_resume: str,
     tailored: TailoredResume,
     chunks: Optional[List[ResumeChunk]] = None,
-) -> None:
+) -> List[str]:
     """Validate a tailored resume against anti-hallucination rules.
 
+    Returns:
+        List of warnings for uncertain or missing evidence.
+
     Raises:
-        ValueError: If any anti-hallucination rule is violated.
+        ValueError: If a hard anti-hallucination rule is violated
+        (missing source citation, hallucinated numbers).
     """
+    warnings: List[str] = []
     base_numbers = _extract_numbers(base_resume)
-    base_skills = _extract_skills(base_resume)
-    base_skills_lower = {s.lower() for s in base_skills}
+    base_lower = base_resume.lower()
 
     for i, bullet in enumerate(tailored.tailored_bullets):
         if "[SOURCE:" not in bullet:
@@ -668,10 +907,22 @@ def validate_tailored_resume(
 
     for skill in tailored.skills_section:
         skill_lower = skill.lower()
-        if skill_lower not in base_skills_lower and not any(
-            skill_lower in base_skill.lower() for base_skill in base_skills
-        ):
-            raise ValueError(f"Skill not found in base resume: {skill}")
+
+        # Exact match
+        if skill_lower in base_lower:
+            continue
+
+        # Keyword overlap
+        if _skill_keyword_overlap(skill, base_resume):
+            continue
+
+        # Concept match
+        if _skill_concept_match(skill, base_resume):
+            continue
+
+        warnings.append(f"Skill not clearly demonstrated in resume: {skill}")
+
+    return warnings
 
 
 async def tailor_resume(
@@ -727,7 +978,8 @@ async def tailor_resume(
         created_at=datetime.now(timezone.utc).isoformat(),
     )
 
-    validate_tailored_resume(base_resume, tailored, chunks)
+    validation_warnings = validate_tailored_resume(base_resume, tailored, chunks)
+    tailored.warnings.extend(validation_warnings)
     return tailored
 
 

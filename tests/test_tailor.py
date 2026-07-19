@@ -15,12 +15,15 @@ BASE_RESUME = """
 ## Experience
 - Led Freedom Planets launch, creating 400+ planets in 3 months and reaching 11.2K MAU.
 - Built AI-powered internal tools that reduced operational effort by 80%.
+- Created AI-powered mission creation tool for Freedom Planets quests.
+- Automated AI-powered KYC review tool for onboarding flows.
 - 6 years of product management experience in gaming and AI.
 - Managed cross-functional team of 5 engineers.
 
 ## Skills
-Product Strategy, Gamification, LiveOps, Growth & Experimentation, AI/LLMs, A/B Testing,
-Customer Discovery, Product Analytics, SQL, Roadmapping, Stakeholder Management.
+Product Strategy, Gamification, LiveOps, Growth & Experimentation, AI/LLMs,
+Claude, ChatGPT, Cursor, A/B Testing, Customer Discovery, Product Analytics,
+SQL, Roadmapping, Stakeholder Management.
 """
 
 
@@ -135,11 +138,30 @@ async def test_no_hallucinated_metrics(mock_openai, sample_job):
 
 @pytest.mark.asyncio
 async def test_skills_not_added(mock_openai, sample_job):
-    """Skills surfaced in the output must already exist in the base resume."""
+    """Skills not demonstrated in the resume are flagged as warnings, not rejected."""
     bad_response = _valid_tailor_response()
     bad_response["skills_section"] = ["Kubernetes", "Quantum Computing"]
 
     _configure_mock(mock_openai, bad_response)
 
-    with pytest.raises(ValueError, match="Skill not found"):
-        await tailor_resume(BASE_RESUME, sample_job)
+    result = await tailor_resume(BASE_RESUME, sample_job)
+
+    assert any(
+        "Skill not clearly demonstrated" in warning for warning in result.warnings
+    )
+
+
+@pytest.mark.asyncio
+async def test_semantic_skill_match(mock_openai, sample_job):
+    """Skills with keyword or concept overlap are accepted."""
+    response = _valid_tailor_response()
+    response["skills_section"] = ["AI-powered tools", "Gamification"]
+
+    _configure_mock(mock_openai, response)
+
+    result = await tailor_resume(BASE_RESUME, sample_job)
+
+    skill_warnings = [
+        warning for warning in result.warnings if "Skill not clearly demonstrated" in warning
+    ]
+    assert not skill_warnings, f"Unexpected skill warnings: {skill_warnings}"
