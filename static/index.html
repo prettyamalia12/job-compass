@@ -263,6 +263,23 @@
             cursor: pointer;
             padding: 0;
             line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .error .error-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .error .error-title {
+            font-weight: 600;
+        }
+
+        .error .error-detail {
+            font-size: 0.82rem;
+            opacity: 0.75;
+            margin-top: 4px;
+            word-break: break-word;
         }
 
         .error .error-close:hover {
@@ -935,7 +952,10 @@
         </div>
 
         <div class="error" id="error">
-            <span id="errorText"></span>
+            <div class="error-content">
+                <div class="error-title" id="errorTitle"></div>
+                <div class="error-detail" id="errorDetail"></div>
+            </div>
             <button class="error-close" onclick="hideError()" aria-label="Dismiss error">×</button>
         </div>
 
@@ -994,8 +1014,46 @@
             $('error').classList.remove('active');
         }
 
+        function humanizeError(msg) {
+            const m = msg || '';
+            const numbers = m.match(/Hallucinated numbers in ([a-z_]+): \[([^\]]*)\]/i);
+            if (numbers) {
+                const section = numbers[1].replace(/_/g, ' ');
+                return `The AI wrote number(s) ${numbers[2]} in the ${section} that don't appear in your base resume. ` +
+                    `This safety check blocks invented metrics. Click Generate again — if it keeps failing, review that section.`;
+            }
+            if (/cites source not found/.test(m)) {
+                return 'The AI\'s source citation didn\'t match your resume text (formatting mismatch). Click Generate again.';
+            }
+            if (/missing \[SOURCE:|malformed SOURCE|empty SOURCE/.test(m)) {
+                return 'The AI output failed a citation safety check. Click Generate again — it usually passes on retry.';
+            }
+            if (/Could not parse any experience/.test(m)) {
+                return 'Your resume format wasn\'t recognized. Use the standard structure: "## PROFESSIONAL EXPERIENCE" with ' +
+                    '"### Company | Location", "**Role** | Dates" lines, and "- " bullets.';
+            }
+            if (/Could not extract meaningful text/.test(m)) {
+                return 'This job site blocks automatic reading. Use the "Paste Text" tab and paste the job description instead.';
+            }
+            if (/invalid JSON|empty response|empty cover letter|no tailored bullets/.test(m)) {
+                return 'The AI service returned an unusable response. Please try again.';
+            }
+            if (/Failed to fetch|NetworkError|ERR_CONNECTION/.test(m)) {
+                return 'Cannot reach the Job Compass server. Make sure it\'s running on port 8000.';
+            }
+            return null;
+        }
+
         function showError(msg) {
-            $('errorText').textContent = msg;
+            const friendly = humanizeError(msg);
+            if (friendly) {
+                $('errorTitle').textContent = friendly;
+                $('errorDetail').textContent = `Technical detail: ${msg}`;
+                $('errorDetail').style.display = 'block';
+            } else {
+                $('errorTitle').textContent = msg;
+                $('errorDetail').style.display = 'none';
+            }
             $('error').classList.add('active');
             $('error').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
