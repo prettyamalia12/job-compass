@@ -944,7 +944,7 @@
         <div class="tailor-section hidden" id="tailorSection">
             <h3>✂️ Tailor Resume</h3>
             <div class="tailor-input">
-                <label>Paste your base resume (Markdown)</label>
+                <label>Your base resume (Markdown) — auto-saved after each generation</label>
                 <textarea id="baseResume" placeholder="# Oktavia Pretty Amalia\n\n## Experience\n- ..."></textarea>
             </div>
             <div class="tailor-input">
@@ -1230,8 +1230,22 @@
                 return;
             }
             renderGapCheckboxes();
+            loadBaseResume();
             $('tailorSection').classList.remove('hidden');
             $('tailorSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        async function loadBaseResume() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/base-resume`);
+                const data = await resp.json();
+                if (data.content) {
+                    $('baseResume').value = data.content;
+                }
+            } catch (err) {
+                // Non-fatal: user can still paste manually
+                console.warn('Could not load saved resume:', err);
+            }
         }
 
         function renderGapCheckboxes() {

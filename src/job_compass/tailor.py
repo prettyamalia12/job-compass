@@ -1020,9 +1020,34 @@ Return the JSON object now."""
         raise ValueError(f"LLM returned invalid JSON: {exc}") from exc
 
 
+_NUMBER_WORDS = {
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
+    "ten": "10",
+    "eleven": "11",
+    "twelve": "12",
+}
+
+
 def _extract_numbers(text: str) -> set[str]:
-    """Extract all numeric tokens from text."""
-    return set(re.findall(r"\d+(?:\.\d+)?%?", text))
+    """Extract all numeric tokens from text, including number words.
+
+    Number words (e.g. "three") count as their digit ("3") so that faithful
+    rewordings like "three months" -> "3 months" are not false positives.
+    """
+    numbers = set(re.findall(r"\d+(?:\.\d+)?%?", text))
+    words = set(re.findall(r"[a-z]+", text.lower()))
+    numbers.update(
+        digit for word, digit in _NUMBER_WORDS.items() if word in words
+    )
+    return numbers
 
 
 def _extract_skill_tokens(skill: str) -> set[str]:

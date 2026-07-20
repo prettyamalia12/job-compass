@@ -130,6 +130,12 @@ class CoverLetterInput(BaseModel):
     tone: str = Field("professional", description="Tone of generated content")
 
 
+class BaseResumeInput(BaseModel):
+    """Request: save the candidate's base resume for future sessions."""
+
+    content: str = Field(..., description="Base resume in Markdown")
+
+
 class PdfGenerateInput(BaseModel):
     """Request: generate a PDF from a tailored resume."""
 

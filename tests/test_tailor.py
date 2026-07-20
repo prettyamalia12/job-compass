@@ -350,6 +350,20 @@ async def test_no_hallucinated_metrics(mock_openai, sample_job):
 
 
 @pytest.mark.asyncio
+async def test_number_words_allow_digit_rewording(mock_openai, sample_job):
+    """Digits matching number words in the base resume are not hallucinations."""
+    response = _valid_tailor_response()
+    # Base resume says "within three months" — "3 months" is a faithful rewording
+    response["summary"] = "Senior PM who scaled Freedom Planets in 3 months."
+
+    _configure_mock(mock_openai, response)
+
+    result = await tailor_resume(BASE_RESUME, sample_job)
+
+    assert "3 months" in result.summary
+
+
+@pytest.mark.asyncio
 async def test_skills_not_added(mock_openai, sample_job):
     """Skills not demonstrated in the resume are flagged as warnings, not rejected."""
     bad_response = _valid_tailor_response()

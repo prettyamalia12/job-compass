@@ -17,6 +17,7 @@ logger = logging.getLogger("job_compass")
 
 from job_compass.config import config
 from job_compass.models import (
+    BaseResumeInput,
     CoverLetterInput,
     JobParseResult,
     JobUrlInput,
@@ -56,6 +57,13 @@ CREATE INDEX IF NOT EXISTS idx_tailored_resumes_cache
 ON tailored_resumes (job_url, base_resume_hash, verified);
 """
 
+CREATE_SETTINGS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+"""
+
 
 async def _init_db() -> None:
     """Ensure the SQLite database and tables exist."""
@@ -63,6 +71,28 @@ async def _init_db() -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(CREATE_TABLE_SQL)
         await db.execute(CREATE_INDEX_SQL)
+        await db.execute(CREATE_SETTINGS_TABLE_SQL)
+        await db.commit()
+
+
+async def _get_setting(key: str) -> Optional[str]:
+    """Read a setting from the settings table."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT value FROM settings WHERE key = ?", (key,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else None
+
+
+async def _set_setting(key: str, value: str) -> None:
+    """Upsert a setting in the settings table."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
         await db.commit()
 
 
@@ -187,6 +217,19 @@ async def get_profile():
     return config.profile.__dict__
 
 
+@app.get("/api/base-resume")
+async def get_base_resume() -> dict[str, str]:
+    """Return the saved base resume (empty string if none saved yet)."""
+    return {"content": await _get_setting("base_resume") or ""}
+
+
+@app.post("/api/base-resume")
+async def save_base_resume(input_data: BaseResumeInput) -> dict[str, bool]:
+    """Save the base resume for future sessions."""
+    await _set_setting("base_resume", input_data.content)
+    return {"saved": True}
+
+
 @app.post("/api/parse", response_model=JobParseResult)
 async def parse_job(input_data: JobUrlInput):
     """Analyze a job posting by URL.
@@ -276,6 +319,7 @@ async def tailor_job_resume(input_data: ResumeTailorInput):
             input_data.gap_bridges,
         )
         await _save_tailored_resume(job_url, base_resume_hash, job_data, tailored)
+        await _set_setting("base_resume", base_resume)
         return tailored
 
     except ValueError as exc:
@@ -295,6 +339,7 @@ async def tailor_cover_letter(input_data: CoverLetterInput) -> dict[str, str]:
             input_data.base_resume_markdown,
             input_data.tone,
         )
+        await _set_setting("base_resume", input_data.base_resume_markdown)
         return {"cover_letter": cover_letter}
     except ValueError as exc:
         logger.warning("Cover letter rejected: %s", exc)
