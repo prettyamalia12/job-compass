@@ -793,7 +793,7 @@ RULES:
 - Do NOT include markdown formatting in the JSON strings.
 
 GAP BRIDGING:
-If gap concerns are provided, for each gap find the closest relevant bullet across all roles and reframe it using the job's language and context. Do NOT add new fake experience. Example:
+If gap concerns are provided, for each gap find the closest relevant bullet across all roles and reframe it using the job's language and context. Do NOT add new fake experience. Do NOT include warnings for gap concerns that you addressed with a [BRIDGED: ...] bullet. Example:
 - Gap: "No explicit beauty/wellness industry experience"
 - Closest bullet: "Conducted customer discovery with 15 merchants across three Thai islands"
 - Reframed: "Led customer discovery with 15 local merchants, driving consumer marketplace adoption [BRIDGED: Conducted customer discovery with 15 merchants across three Thai islands]"

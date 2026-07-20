@@ -1089,7 +1089,7 @@
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
-            return div.innerHTML;
+            return div.innerHTML.replace(/"/g, '&quot;');
         }
 
         function renderResult(data) {
@@ -1308,14 +1308,20 @@
 
         function renderGapCheckboxes() {
             const container = $('gapCheckboxList');
-            const gaps = currentJobData.gap_concerns || [];
+            const previouslyChecked = new Set(
+                Array.from(container.querySelectorAll('input[type="checkbox"]:checked'))
+                    .map(cb => cb.value)
+            );
+            const gaps = (currentJobData.gap_concerns || []).filter((gap, i, all) =>
+                !all.slice(0, i).some(prev => gapsSimilar(prev, gap))
+            );
             if (!gaps.length) {
                 container.innerHTML = '<span class="empty-state">No gaps detected</span>';
                 return;
             }
             container.innerHTML = gaps.map((gap, i) => `
-                <label class="gap-checkbox-item" data-index="${i}">
-                    <input type="checkbox" value="${escapeHtml(gap)}" onchange="toggleGapCheckbox(this)">
+                <label class="gap-checkbox-item ${previouslyChecked.has(gap) ? 'checked' : ''}" data-origin="initial" data-index="${i}">
+                    <input type="checkbox" value="${escapeHtml(gap)}" ${previouslyChecked.has(gap) ? 'checked' : ''} onchange="toggleGapCheckbox(this)">
                     <span class="gap-label">${escapeHtml(gap)}</span>
                 </label>
             `).join('');
@@ -1325,35 +1331,76 @@
             checkbox.closest('.gap-checkbox-item').classList.toggle('checked', checkbox.checked);
         }
 
-        function normalizeGapText(text) {
-            return text.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+        const GAP_STOPWORDS = new Set([
+            'a', 'an', 'the', 'and', 'or', 'of', 'in', 'on', 'to', 'for', 'with', 'by',
+            'from', 'as', 'is', 'are', 'was', 'were', 'be', 'been', 'no', 'not', 'any',
+            'you', 'your', 'their', 'its', 'it', 'this', 'that', 'these', 'those',
+            'within', 'regarding', 'about', 'into', 'than', 'then', 'so', 'such', 'at',
+            'do', 'does', 'did', 'have', 'has', 'had', 'found', 'provided', 'chunks',
+        ]);
+
+        const GAP_PREFIXES = [
+            /^skill not clearly demonstrated in (the )?resume[:\s]*/i,
+            /^no resume evidence found for[:\s]*/i,
+        ];
+
+        function gapWords(text) {
+            let normalized = ` ${text.toLowerCase()} `;
+            GAP_PREFIXES.forEach(re => { normalized = normalized.replace(re, ' '); });
+            return new Set(
+                normalized.replace(/[^a-z0-9 ]/g, ' ').split(/\s+/)
+                    .filter(w => w && !GAP_STOPWORDS.has(w))
+            );
         }
 
-        function addWarningCheckboxes(warnings) {
+        function gapsSimilar(a, b) {
+            const wordsA = gapWords(a);
+            const wordsB = gapWords(b);
+            if (!wordsA.size || !wordsB.size) return false;
+            let common = 0;
+            for (const word of wordsA) {
+                if (wordsB.has(word)) common += 1;
+            }
+            return common / Math.min(wordsA.size, wordsB.size) >= 0.8;
+        }
+
+        function refreshWarningCheckboxes(warnings) {
             const container = $('gapCheckboxList');
             const emptyState = container.querySelector('.empty-state');
             if (emptyState) emptyState.remove();
 
-            const existing = Array.from(container.querySelectorAll('input[type="checkbox"]'))
-                .map(cb => normalizeGapText(cb.value));
+            const items = Array.from(container.querySelectorAll('.gap-checkbox-item'));
+            const warningItems = items.filter(el => el.dataset.origin === 'warning');
+            const keptTexts = items
+                .filter(el => el.dataset.origin !== 'warning')
+                .map(el => el.querySelector('input').value);
 
-            let added = 0;
+            // Snapshot previous warning checkbox state, then rebuild from
+            // the latest warnings so resolved gaps disappear.
+            const previous = warningItems.map(el => ({
+                text: el.querySelector('input').value,
+                checked: el.querySelector('input').checked,
+            }));
+            warningItems.forEach(el => el.remove());
+
+            const addedTexts = [];
             (warnings || []).forEach(warning => {
-                const norm = normalizeGapText(warning);
-                if (!norm) return;
-                const isDup = existing.some(e => e.includes(norm) || norm.includes(e));
+                const isDup =
+                    keptTexts.some(t => gapsSimilar(t, warning)) ||
+                    addedTexts.some(t => gapsSimilar(t, warning));
                 if (isDup) return;
-                existing.push(norm);
+                addedTexts.push(warning);
+                const prev = previous.find(p => gapsSimilar(p.text, warning));
+                const isChecked = prev ? prev.checked : false;
                 const label = document.createElement('label');
-                label.className = 'gap-checkbox-item';
+                label.className = `gap-checkbox-item${isChecked ? ' checked' : ''}`;
+                label.dataset.origin = 'warning';
                 label.innerHTML = `
-                    <input type="checkbox" value="${escapeHtml(warning)}" onchange="toggleGapCheckbox(this)">
+                    <input type="checkbox" value="${escapeHtml(warning)}" ${isChecked ? 'checked' : ''} onchange="toggleGapCheckbox(this)">
                     <span class="gap-label">${escapeHtml(warning)}</span>
                 `;
                 container.appendChild(label);
-                added += 1;
             });
-            return added;
         }
 
         function setTailorLoading(isLoading) {
@@ -1468,7 +1515,7 @@
             window.currentTailoredResume = data;
 
             const warningCount = (data.warnings || []).length;
-            addWarningCheckboxes(data.warnings || []);
+            refreshWarningCheckboxes(data.warnings || []);
 
             const gapsNote = warningCount
                 ? `<div class="gaps-note" onclick="$('gapCheckboxList').scrollIntoView({ behavior: 'smooth', block: 'center' })">
