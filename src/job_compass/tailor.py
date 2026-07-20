@@ -11,7 +11,7 @@ import numpy as np
 from openai import AsyncOpenAI
 
 from job_compass.config import config
-from job_compass.models import JobParseResult, TailoredResume
+from job_compass.models import JobParseResult, TailoredExperience, TailoredResume
 
 client = AsyncOpenAI(api_key=config.openai_api_key)
 
@@ -574,43 +574,228 @@ class ResumeChunk:
     keyword_count: int = 0
 
 
+@dataclass
+class ParsedRole:
+    """One role (company + title + dates + bullets) parsed from a base resume."""
+
+    company: str
+    location: str
+    role: str
+    dates: str
+    bullets: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ParsedResume:
+    """Structured representation of the candidate's base resume."""
+
+    name: str = ""
+    title: str = ""
+    contact: str = ""
+    summary: str = ""
+    skills: List[str] = field(default_factory=list)
+    roles: List[ParsedRole] = field(default_factory=list)
+    education: str = ""
+    volunteer: Optional[str] = None
+    languages: List[str] = field(default_factory=list)
+    tools: List[str] = field(default_factory=list)
+
+
+_SECTION_ALIASES = {
+    "summary": {"professional summary", "summary"},
+    "skills": {"core skills", "skills"},
+    "experience": {"professional experience", "experience", "work experience"},
+    "education": {"education"},
+    "volunteer": {"volunteer experience", "volunteer"},
+    "languages": {"languages"},
+    "tools": {"tools"},
+}
+
+
+def _section_key(header: str) -> Optional[str]:
+    """Map a markdown section header to a canonical section key."""
+    normalized = header.strip().lower()
+    for key, aliases in _SECTION_ALIASES.items():
+        if normalized in aliases:
+            return key
+    return None
+
+
+def _strip_markdown(text: str) -> str:
+    """Remove markdown emphasis markers and trim whitespace."""
+    return re.sub(r"[*_`]+", "", text).strip()
+
+
+def _parse_header_lines(lines: List[str], parsed: ParsedResume) -> int:
+    """Parse name/title/contact from the resume header. Returns next line index."""
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx].strip()
+        if not line or line == "---":
+            idx += 1
+            continue
+        if line.startswith("# ") and not line.startswith("## "):
+            parsed.name = _strip_markdown(line[2:])
+        elif line.startswith("## "):
+            break
+        elif not parsed.title and re.fullmatch(r"\*\*.+\*\*", line):
+            parsed.title = _strip_markdown(line)
+        elif not parsed.contact and "|" in line:
+            parsed.contact = _strip_markdown(line)
+        idx += 1
+    return idx
+
+
+def _parse_experience_lines(lines: List[str], parsed: ParsedResume) -> None:
+    """Parse company/role/bullet hierarchy from experience section lines."""
+    company = ""
+    location = ""
+    current_role: Optional[ParsedRole] = None
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line == "---":
+            continue
+        if line.startswith("### "):
+            header = _strip_markdown(line[4:])
+            company, _, location = (part.strip() for part in header.partition("|"))
+            current_role = None
+            continue
+        role_match = re.match(r"^\*\*(.+?)\*\*\s*\|\s*(.+)$", line)
+        if role_match:
+            current_role = ParsedRole(
+                company=company,
+                location=location,
+                role=role_match.group(1).strip(),
+                dates=role_match.group(2).strip(),
+            )
+            parsed.roles.append(current_role)
+            continue
+        bullet_match = re.match(r"^[-•·◦*]\s+(.+)$", line)
+        if bullet_match and current_role is not None:
+            current_role.bullets.append(_strip_markdown(bullet_match.group(1)))
+
+
+def parse_resume_structure(text: str) -> ParsedResume:
+    """Parse a markdown resume into its structured representation.
+
+    Expects the standard format: ``# Name`` header, ``## SECTION`` headers, and
+    ``### Company | Location`` blocks containing ``**Role** | Dates`` lines and
+    ``- bullet`` lines. Falls back to the configured profile for name/title.
+
+    Args:
+        text: Markdown resume text.
+
+    Returns:
+        ParsedResume with sections and role hierarchy.
+
+    Raises:
+        ValueError: If no experience roles could be parsed.
+    """
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = text.split("\n")
+    parsed = ParsedResume()
+
+    idx = _parse_header_lines(lines, parsed)
+
+    section_key: Optional[str] = None
+    section_lines: Dict[str, List[str]] = {}
+    for line in lines[idx:]:
+        header_match = re.match(r"^##\s+(.+?)\s*$", line)
+        if header_match:
+            section_key = _section_key(header_match.group(1))
+            continue
+        if section_key is not None:
+            section_lines.setdefault(section_key, []).append(line)
+
+    def _section_text(key: str) -> str:
+        raw = "\n".join(section_lines.get(key, []))
+        raw = re.sub(r"\n{2,}", "\n", raw)
+        cleaned = [
+            _strip_markdown(line)
+            for line in raw.split("\n")
+            if line.strip() and line.strip() != "---"
+        ]
+        return "\n".join(cleaned).strip()
+
+    def _section_bullets(key: str) -> List[str]:
+        items: List[str] = []
+        for line in section_lines.get(key, []):
+            bullet_match = re.match(r"^\s*[-•·◦*]\s+(.+)$", line.strip())
+            if bullet_match:
+                items.append(_strip_markdown(bullet_match.group(1)))
+        return items
+
+    parsed.summary = " ".join(_section_text("summary").split())
+    parsed.skills = _section_bullets("skills")
+    _parse_experience_lines(section_lines.get("experience", []), parsed)
+    parsed.education = _section_text("education")
+    volunteer = _section_text("volunteer")
+    parsed.volunteer = volunteer or None
+    parsed.languages = _section_bullets("languages")
+
+    tools_text = " ".join(_section_text("tools").split())
+    if tools_text:
+        parsed.tools = [t.strip() for t in re.split(r"[•·,]", tools_text) if t.strip()]
+
+    if not parsed.name:
+        parsed.name = config.profile.name
+    if not parsed.title:
+        parsed.title = config.profile.title
+    if not parsed.roles:
+        raise ValueError(
+            "Could not parse any experience from the resume. Expected sections like "
+            "'## PROFESSIONAL EXPERIENCE' with '### Company | Location' and "
+            "'**Role** | Dates' lines."
+        )
+    return parsed
+
+
 TAILOR_SYSTEM_PROMPT = """You are an expert resume writer with strict anti-hallucination rules.
 
 You will be given:
 1. A job description (requirements, title, company)
-2. A set of resume chunks that are the ONLY source material you may use
+2. The candidate's work experience as STRUCTURED ROLES. Each role has an index, company, title, dates, and its original bullets. Those bullets are the ONLY source material you may use.
 3. A list of gap concerns to bridge (optional)
 
-Your task is to tailor a resume for this job using ONLY the provided resume chunks. You may NOT invent metrics, companies, dates, products, responsibilities, or skills. You may only reword, reorder, and emphasize existing evidence.
+Your task is to tailor the resume for this job using ONLY the provided role bullets. You may NOT invent metrics, companies, dates, products, responsibilities, or skills. You may only reword, reorder, and emphasize existing evidence.
 
 Return ONLY a JSON object with these exact fields:
 
 {
-  "summary": "2-3 sentence professional summary tailored to the job. Only use facts from the provided chunks.",
-  "tailored_bullets": [
-    "bullet text that includes [SOURCE: \"exact original chunk text\"] or [BRIDGED: \"exact original chunk text\"] at the end",
-    ...
+  "summary": "2-3 sentence professional summary tailored to the job. Only use facts from the provided bullets.",
+  "skills": ["skill1", "skill2", "..."],
+  "experience": [
+    {
+      "role_index": 0,
+      "is_relevant": true,
+      "bullets": [
+        "tailored bullet ending with [SOURCE: \\"exact original bullet text\\"] or [BRIDGED: \\"exact original bullet text\\"]"
+      ]
+    }
   ],
-  "skills_section": ["skill1", "skill2", ...],
   "changes_made": ["brief description of each change made"],
-  "warnings": ["any gaps where the job requirement has no matching evidence chunk"],
+  "warnings": ["any gaps where the job requirement has no matching evidence"],
   "estimated_ats_score": 75
 }
 
 RULES:
-- Every tailored_bullet MUST end with [SOURCE: "exact original chunk text"] or [BRIDGED: "exact original chunk text"]. The source text must be a verbatim substring from the provided chunks.
+- Include EVERY role index in "experience", in the same order as provided.
+- For each role, select and tailor the 3-4 strongest, most job-relevant bullets, strongest first. NEVER more than 4 bullets per role.
+- If a role is irrelevant to the target job, set "is_relevant": false and return at most 1-2 bullets (or an empty list).
+- Every bullet MUST end with [SOURCE: "exact original bullet text"] or [BRIDGED: "exact original bullet text"]. The cited text must be a verbatim substring of THAT role's original bullets.
 - Use [SOURCE: ...] for bullets that directly match the job requirements.
-- Use [BRIDGED: ...] for bullets that reframe existing experience to address a gap concern. The reframed bullet must still be based on the cited original chunk, not invented.
-- The skills_section MUST only contain skills explicitly mentioned in the provided chunks.
+- Use [BRIDGED: ...] for bullets that reframe existing experience to address a gap concern. The reframed bullet must still be based on the cited original bullet, not invented.
+- Rewrite bullets to use the job's keywords naturally, but preserve every fact, number, and outcome exactly.
+- The skills list MUST contain 8-12 skills, each explicitly mentioned in the provided resume content.
 - estimated_ats_score must be an integer 0-100. Estimate how well the tailored resume matches the job requirements based ONLY on the provided evidence.
-- Do NOT invent numbers, percentages, metrics, or outcomes that are not in the chunks.
-- If a requirement has no matching chunk, note it in warnings.
+- Do NOT invent numbers, percentages, metrics, or outcomes that are not in the provided bullets.
+- If a requirement has no matching bullet, note it in warnings.
 - Do NOT include markdown formatting in the JSON strings.
 
 GAP BRIDGING:
-If gap concerns are provided, for each gap find the closest relevant resume chunk and reframe it using the job's language and context. Do NOT add new fake experience. Example:
+If gap concerns are provided, for each gap find the closest relevant bullet across all roles and reframe it using the job's language and context. Do NOT add new fake experience. Example:
 - Gap: "No explicit beauty/wellness industry experience"
-- Closest chunk: "Conducted customer discovery with 15 merchants across three Thai islands"
+- Closest bullet: "Conducted customer discovery with 15 merchants across three Thai islands"
 - Reframed: "Led customer discovery with 15 local merchants, driving consumer marketplace adoption [BRIDGED: Conducted customer discovery with 15 merchants across three Thai islands]"
 """
 
@@ -763,27 +948,28 @@ async def match_chunks_to_requirements(
     return matches
 
 
-def _build_evidence_chunks(matches: Dict[str, List[ResumeChunk]]) -> List[str]:
-    """Deduplicate and serialize matched chunks for the LLM prompt."""
-    evidence_chunks: List[str] = []
-    seen_chunk_ids: set[int] = set()
-    for chunks in matches.values():
-        for chunk in chunks:
-            if chunk.id not in seen_chunk_ids:
-                evidence_chunks.append(f'CHUNK {chunk.id}: {chunk.text}')
-                seen_chunk_ids.add(chunk.id)
-    return evidence_chunks
+def _build_role_evidence(roles: List[ParsedRole]) -> str:
+    """Serialize parsed roles with their bullets for the LLM prompt."""
+    blocks: List[str] = []
+    for idx, role in enumerate(roles):
+        header = f"ROLE {idx}: {role.company}"
+        if role.location:
+            header += f" | {role.location}"
+        header += f" — {role.role} ({role.dates})"
+        bullets = "\n".join(f"  BULLET: {bullet}" for bullet in role.bullets)
+        blocks.append(f"{header}\n{bullets}")
+    return "\n\n".join(blocks)
 
 
 async def _call_tailor_llm(
     job_data: JobParseResult,
-    matches: Dict[str, List[ResumeChunk]],
+    roles: List[ParsedRole],
     tone: str,
     max_length_pages: int,
     gap_bridges: Optional[List[str]] = None,
 ) -> dict[str, Any]:
-    """Call the LLM to tailor the resume."""
-    evidence_chunks = _build_evidence_chunks(matches)
+    """Call the LLM to tailor the resume, preserving role structure."""
+    role_evidence = _build_role_evidence(roles)
     requirements_text = "\n".join(
         f"- {req}" for req in list(job_data.key_requirements) + list(job_data.nice_to_have)
     )
@@ -806,8 +992,8 @@ Job Requirements:
 {requirements_text}
 {gap_bridges_text}
 
-Resume Evidence Chunks (ONLY source material you may use):
-{chr(10).join(evidence_chunks)}
+Candidate Experience (ONLY source material you may use):
+{role_evidence}
 
 Target length: {max_length_pages} page{'s' if max_length_pages > 1 else ''}.
 
@@ -820,7 +1006,7 @@ Return the JSON object now."""
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.2,
-        max_tokens=3000,
+        max_tokens=4000,
         response_format={"type": "json_object"},
     )
 
@@ -875,12 +1061,29 @@ def _find_source_in_chunks(source: str, chunks: List[ResumeChunk]) -> bool:
     return False
 
 
+_ANNOTATION_RE = re.compile(
+    r"\s*\[(?:SOURCE|BRIDGED):\s*(?:\"[^\"]*\"|'[^']*'|[^\]]+)\]\s*$"
+)
+
+
+def _strip_annotations(bullet: str) -> str:
+    """Remove the trailing [SOURCE: ...] / [BRIDGED: ...] annotation."""
+    return _ANNOTATION_RE.sub("", bullet).strip()
+
+
 def validate_tailored_resume(
     base_resume: str,
-    tailored: TailoredResume,
+    annotated_bullets: List[str],
+    summary: str,
+    cover_letter: str,
+    skills: List[str],
     chunks: Optional[List[ResumeChunk]] = None,
 ) -> List[str]:
-    """Validate a tailored resume against anti-hallucination rules.
+    """Validate LLM-tailored content against anti-hallucination rules.
+
+    Validation runs on the internal annotated bullets (with [SOURCE: ...] /
+    [BRIDGED: ...] citations). Annotations are stripped only after validation
+    passes; they never appear in the final output.
 
     Returns:
         List of warnings for uncertain or missing evidence.
@@ -893,7 +1096,7 @@ def validate_tailored_resume(
     base_numbers = _extract_numbers(base_resume)
     base_lower = base_resume.lower()
 
-    for i, bullet in enumerate(tailored.tailored_bullets):
+    for i, bullet in enumerate(annotated_bullets):
         if "[SOURCE:" not in bullet and "[BRIDGED:" not in bullet:
             raise ValueError(
                 f"Tailored bullet {i + 1} missing [SOURCE: or [BRIDGED: annotation"
@@ -933,15 +1136,13 @@ def validate_tailored_resume(
                 )
 
     for field_name, text in [
-        ("tailored_bullets", "\n".join(tailored.tailored_bullets)),
-        ("summary", tailored.summary),
-        ("cover_letter", tailored.cover_letter),
+        ("tailored_bullets", "\n".join(annotated_bullets)),
+        ("summary", summary),
+        ("cover_letter", cover_letter),
     ]:
         # For bullets, only check SOURCE bullets; BRIDGED bullets are checked above
         if field_name == "tailored_bullets":
-            source_bullets = [
-                b for b in tailored.tailored_bullets if "[BRIDGED:" not in b
-            ]
+            source_bullets = [b for b in annotated_bullets if "[BRIDGED:" not in b]
             text = "\n".join(source_bullets)
         text_numbers = _extract_numbers(text)
         hallucinated = text_numbers - base_numbers
@@ -950,7 +1151,7 @@ def validate_tailored_resume(
                 f"Hallucinated numbers in {field_name}: {sorted(hallucinated)}"
             )
 
-    for skill in tailored.skills_section:
+    for skill in skills:
         skill_lower = skill.lower()
 
         # Exact match
@@ -970,6 +1171,58 @@ def validate_tailored_resume(
     return warnings
 
 
+MAX_BULLETS_PER_ROLE = 4
+MAX_BULLETS_IRRELEVANT_ROLE = 2
+MAX_SKILLS = 12
+
+
+def _build_experience(
+    roles: List[ParsedRole],
+    llm_experience: Any,
+) -> tuple[List[TailoredExperience], List[str]]:
+    """Map LLM-tailored bullets onto the parsed role hierarchy.
+
+    Companies, roles, locations, and dates always come from the parsed base
+    resume — the LLM only supplies bullets — so they can never be hallucinated.
+
+    Args:
+        roles: Roles parsed from the base resume, in order.
+        llm_experience: The "experience" array from the LLM JSON response.
+
+    Returns:
+        Tuple of (structured experiences with clean bullets, flat list of
+        annotated bullets for validation).
+    """
+    by_index: Dict[int, dict[str, Any]] = {}
+    if isinstance(llm_experience, list):
+        for entry in llm_experience:
+            if isinstance(entry, dict) and isinstance(entry.get("role_index"), int):
+                by_index[entry["role_index"]] = entry
+
+    experiences: List[TailoredExperience] = []
+    annotated: List[str] = []
+    for idx, role in enumerate(roles):
+        entry = by_index.get(idx, {})
+        is_relevant = bool(entry.get("is_relevant", False))
+        cap = MAX_BULLETS_PER_ROLE if is_relevant else MAX_BULLETS_IRRELEVANT_ROLE
+        raw_bullets = [
+            bullet for bullet in entry.get("bullets", []) if isinstance(bullet, str)
+        ][:cap]
+        annotated.extend(raw_bullets)
+        experiences.append(
+            TailoredExperience(
+                company=role.company,
+                location=role.location,
+                role=role.role,
+                dates=role.dates,
+                bullets=[_strip_annotations(bullet) for bullet in raw_bullets],
+                is_relevant=is_relevant,
+                original_bullets=list(role.bullets),
+            )
+        )
+    return experiences, annotated
+
+
 async def tailor_resume(
     base_resume: str,
     job_data: JobParseResult,
@@ -979,6 +1232,10 @@ async def tailor_resume(
 ) -> TailoredResume:
     """Tailor a resume for a specific job with anti-hallucination guardrails.
 
+    Parses the base resume into its structured sections, has the LLM select
+    and reword bullets per role (with internal source citations), validates
+    the citations and facts, then strips citations from the final output.
+
     Args:
         base_resume: Markdown resume text.
         job_data: Parsed job description.
@@ -987,8 +1244,9 @@ async def tailor_resume(
         gap_bridges: Gap concerns to bridge by reframing existing experience.
 
     Returns:
-        TailoredResume with source-cited bullets and gap warnings.
+        Structured TailoredResume preserving the base resume hierarchy.
     """
+    parsed = parse_resume_structure(base_resume)
     chunks = chunk_resume(base_resume)
     all_requirements = list(job_data.key_requirements) + list(job_data.nice_to_have)
     matches = await match_chunks_to_requirements(chunks, all_requirements)
@@ -999,13 +1257,19 @@ async def tailor_resume(
             warnings.append(f"No resume evidence found for: {requirement}")
 
     raw_result = await _call_tailor_llm(
-        job_data, matches, tone, max_length_pages, gap_bridges
+        job_data, parsed.roles, tone, max_length_pages, gap_bridges
     )
 
-    original_bullets = [c.text for c in chunks]
-    tailored_bullets = raw_result.get("tailored_bullets", [])
-    skills_section = raw_result.get("skills_section", [])
-    summary = raw_result.get("summary", "")
+    experiences, annotated = _build_experience(
+        parsed.roles, raw_result.get("experience", [])
+    )
+    if not annotated:
+        raise ValueError("LLM returned no tailored bullets")
+
+    summary = str(raw_result.get("summary", "")).strip()
+    skills = [
+        skill for skill in raw_result.get("skills", []) if isinstance(skill, str)
+    ][:MAX_SKILLS]
     changes_made = raw_result.get("changes_made", [])
     estimated_ats_score = raw_result.get("estimated_ats_score", 70)
 
@@ -1015,21 +1279,28 @@ async def tailor_resume(
     if isinstance(llm_warnings, list):
         warnings.extend(llm_warnings)
 
-    tailored = TailoredResume(
-        original_bullets=original_bullets,
-        tailored_bullets=tailored_bullets,
-        skills_section=skills_section,
+    validation_warnings = validate_tailored_resume(
+        base_resume, annotated, summary, cover_letter, skills, chunks
+    )
+    warnings.extend(validation_warnings)
+
+    return TailoredResume(
+        name=parsed.name,
+        title=parsed.title,
+        contact=parsed.contact,
         summary=summary,
+        skills=skills,
+        experience=experiences,
+        education=parsed.education,
+        volunteer=parsed.volunteer,
+        languages=parsed.languages,
+        tools=parsed.tools,
         cover_letter=cover_letter,
         changes_made=changes_made,
         warnings=warnings,
         estimated_ats_score=max(0, min(100, int(estimated_ats_score))),
         created_at=datetime.now(timezone.utc).isoformat(),
     )
-
-    validation_warnings = validate_tailored_resume(base_resume, tailored, chunks)
-    tailored.warnings.extend(validation_warnings)
-    return tailored
 
 
 async def generate_cover_letter(

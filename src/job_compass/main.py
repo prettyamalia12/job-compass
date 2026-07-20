@@ -114,7 +114,11 @@ async def _get_cached_tailored_resume(
         ) as cursor:
             row = await cursor.fetchone()
             if row:
-                return TailoredResume(**json.loads(row[0]))
+                try:
+                    return TailoredResume(**json.loads(row[0]))
+                except Exception:
+                    # Cached row predates the current schema — regenerate.
+                    return None
     return None
 
 

@@ -586,28 +586,6 @@
 
         .tailor-result.active { display: block; }
 
-        .diff-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .diff-column {
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 16px;
-        }
-
-        .diff-column h4 {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            color: var(--text-dim);
-            margin-bottom: 12px;
-        }
-
         .bullet {
             padding: 12px;
             border-radius: 8px;
@@ -643,6 +621,123 @@
             margin-top: 6px;
             font-style: italic;
         }
+
+        .bullet-original {
+            color: var(--text-dim);
+            font-style: italic;
+        }
+
+        /* Structured resume preview */
+        .resume-header {
+            padding: 20px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 16px;
+        }
+
+        .resume-name {
+            font-size: 1.35rem;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+        }
+
+        .resume-title {
+            color: var(--text-muted);
+            font-style: italic;
+            margin-top: 2px;
+        }
+
+        .resume-contact {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+
+        .exp-block {
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--bg);
+            margin-bottom: 10px;
+        }
+
+        .exp-block > summary {
+            cursor: pointer;
+            padding: 12px 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 12px;
+            align-items: baseline;
+            list-style: none;
+        }
+
+        .exp-block > summary::-webkit-details-marker { display: none; }
+
+        .exp-block > summary::before {
+            content: '▸';
+            color: var(--text-dim);
+        }
+
+        .exp-block[open] > summary::before { content: '▾'; }
+
+        .exp-company { font-weight: 700; }
+
+        .exp-role {
+            color: var(--text-muted);
+            font-size: 0.88rem;
+        }
+
+        .exp-badge {
+            font-size: 0.72rem;
+            background: var(--border);
+            color: var(--text-muted);
+            padding: 2px 8px;
+            border-radius: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .exp-irrelevant { opacity: 0.6; }
+
+        .exp-body { padding: 0 16px 14px; }
+
+        .exp-original { margin-top: 6px; }
+
+        .exp-original > summary {
+            cursor: pointer;
+            color: var(--text-dim);
+            font-size: 0.82rem;
+            padding: 4px 0;
+            list-style: none;
+        }
+
+        .exp-original > summary::-webkit-details-marker { display: none; }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 14px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-swatch {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+
+        .swatch-green { background: var(--success); }
+        .swatch-yellow { background: var(--warning); }
+        .swatch-red { background: var(--danger); }
 
         .tailor-block {
             background: var(--bg);
@@ -738,7 +833,6 @@
         }
 
         @media (max-width: 640px) {
-            .diff-grid { grid-template-columns: 1fr; }
             .tailor-row { flex-direction: column; align-items: stretch; }
         }
 
@@ -1244,62 +1338,62 @@
             }
         }
 
-        function classifyBullet(originalText, tailoredText) {
-            if (!tailoredText || tailoredText.includes('[SOURCE:') || tailoredText.includes('[BRIDGED:')) {
-                const clean = tailoredText.replace(/\[(?:SOURCE|BRIDGED):\s*"[^"]+"\]/, '').trim();
-                if (!clean) return 'red';
-            }
-            const normOriginal = originalText.toLowerCase().replace(/[^a-z0-9]/g, ' ');
-            const normTailored = tailoredText.toLowerCase().replace(/[^a-z0-9]/g, ' ');
-            const originalWords = new Set(normOriginal.split(/\s+/).filter(Boolean));
-            const tailoredWords = new Set(normTailored.split(/\s+/).filter(Boolean));
-
-            if (originalWords.size === 0) return 'yellow';
-
-            let common = 0;
-            for (const word of tailoredWords) {
-                if (originalWords.has(word)) common += 1;
-            }
-            const overlap = common / originalWords.size;
-
-            if (overlap >= 0.85) return 'green';
-            if (overlap >= 0.5) return 'yellow';
-            return 'red';
+        function wordSet(text) {
+            return new Set(
+                text.toLowerCase().replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(Boolean)
+            );
         }
 
-        function renderBullet(text, type) {
-            const sourceMatch = text.match(/\[(?:SOURCE|BRIDGED):\s*"([^"]+)"\]/);
-            let body = text;
-            let source = '';
-            let isBridged = false;
-            if (sourceMatch) {
-                body = text.slice(0, sourceMatch.index).trim();
-                source = sourceMatch[1];
-                isBridged = text.includes('[BRIDGED:');
-            }
+        function classifyTailoredBullet(tailoredText, originalBullets) {
+            const tailoredWords = wordSet(tailoredText);
+            if (tailoredWords.size === 0) return 'red';
+            let best = 0;
+            (originalBullets || []).forEach(original => {
+                const originalWords = wordSet(original);
+                if (originalWords.size === 0) return;
+                let common = 0;
+                for (const word of tailoredWords) {
+                    if (originalWords.has(word)) common += 1;
+                }
+                best = Math.max(best, common / tailoredWords.size);
+            });
+            if (best >= 0.6) return 'green';   // reworded from an original bullet
+            if (best >= 0.35) return 'yellow'; // emphasis added
+            return 'red';                       // needs verification
+        }
+
+        function renderExperienceBlock(exp) {
+            const companyLine = exp.location ? `${exp.company} | ${exp.location}` : exp.company;
+            const bullets = (exp.bullets || []).map(bullet => {
+                const type = classifyTailoredBullet(bullet, exp.original_bullets);
+                return `<div class="bullet bullet-${type}">${escapeHtml(bullet)}</div>`;
+            }).join('') || '<span class="empty-state">No bullets selected for this role</span>';
+
+            const originals = (exp.original_bullets || []).map(bullet =>
+                `<div class="bullet bullet-original">${escapeHtml(bullet)}</div>`
+            ).join('');
+
+            const badge = exp.is_relevant
+                ? ''
+                : '<span class="exp-badge">Minimized — less relevant</span>';
+
             return `
-                <div class="bullet bullet-${type}">
-                    ${escapeHtml(body)}
-                    ${source ? `<span class="bullet-source">${isBridged ? 'Bridged: ' : 'Source: '}${escapeHtml(source)}</span>` : ''}
-                </div>
+                <details class="exp-block ${exp.is_relevant ? '' : 'exp-irrelevant'}" ${exp.is_relevant ? 'open' : ''}>
+                    <summary>
+                        <span class="exp-company">${escapeHtml(companyLine)}</span>
+                        <span class="exp-role">${escapeHtml(exp.role)} · ${escapeHtml(exp.dates)}</span>
+                        ${badge}
+                    </summary>
+                    <div class="exp-body">
+                        ${bullets}
+                        ${originals ? `<details class="exp-original"><summary>View original bullets</summary>${originals}</details>` : ''}
+                    </div>
+                </details>
             `;
         }
 
         function renderTailorResult(data) {
             window.currentTailoredResume = data;
-            const originalBullets = data.original_bullets || [];
-            const tailoredBullets = data.tailored_bullets || [];
-            const maxLen = Math.max(originalBullets.length, tailoredBullets.length);
-
-            let originalHtml = '';
-            let tailoredHtml = '';
-            for (let i = 0; i < maxLen; i++) {
-                const original = originalBullets[i] || '';
-                const tailored = tailoredBullets[i] || '';
-                const type = classifyBullet(original, tailored);
-                originalHtml += original ? renderBullet(original, 'green') : '<div class="bullet">—</div>';
-                tailoredHtml += tailored ? renderBullet(tailored, type) : '<div class="bullet">—</div>';
-            }
 
             const warningCount = (data.warnings || []).length;
             addWarningCheckboxes(data.warnings || []);
@@ -1310,6 +1404,10 @@
                    </div>`
                 : '';
 
+            const experienceHtml = (data.experience || []).map(renderExperienceBlock).join('');
+            const languages = data.languages || [];
+            const tools = data.tools || [];
+
             const html = `
                 ${gapsNote}
 
@@ -1318,15 +1416,10 @@
                     <label for="verifiedCheckbox">I verified these changes and sources against my resume</label>
                 </div>
 
-                <div class="diff-grid">
-                    <div class="diff-column">
-                        <h4>Original</h4>
-                        ${originalHtml}
-                    </div>
-                    <div class="diff-column">
-                        <h4>Tailored</h4>
-                        ${tailoredHtml}
-                    </div>
+                <div class="resume-header">
+                    <div class="resume-name">${escapeHtml(data.name || '')}</div>
+                    <div class="resume-title">${escapeHtml(data.title || '')}</div>
+                    <div class="resume-contact">${escapeHtml(data.contact || '')}</div>
                 </div>
 
                 <div class="tailor-block">
@@ -1335,12 +1428,46 @@
                 </div>
 
                 <div class="tailor-block">
-                    <h4>Skills <button class="copy-btn" data-target="skills" disabled>Copy</button></h4>
+                    <h4>Core Skills <button class="copy-btn" data-target="skills" disabled>Copy</button></h4>
                     <div class="tag-list">
-                        ${(data.skills_section || []).map(skill => `<span class="tag">${escapeHtml(skill)}</span>`).join('')}
+                        ${(data.skills || []).map(skill => `<span class="tag">${escapeHtml(skill)}</span>`).join('')}
                     </div>
-                    <div id="skillsText" class="hidden">${(data.skills_section || []).join(', ')}</div>
+                    <div id="skillsText" class="hidden">${(data.skills || []).join(', ')}</div>
                 </div>
+
+                <div class="tailor-block">
+                    <h4>Professional Experience</h4>
+                    <div class="legend">
+                        <span class="legend-item"><span class="legend-swatch swatch-green"></span>Reworded</span>
+                        <span class="legend-item"><span class="legend-swatch swatch-yellow"></span>Emphasis added</span>
+                        <span class="legend-item"><span class="legend-swatch swatch-red"></span>Needs verification</span>
+                    </div>
+                    ${experienceHtml}
+                </div>
+
+                ${data.education ? `
+                <div class="tailor-block">
+                    <h4>Education</h4>
+                    <p style="white-space: pre-wrap;">${escapeHtml(data.education)}</p>
+                </div>` : ''}
+
+                ${data.volunteer ? `
+                <div class="tailor-block">
+                    <h4>Volunteer Experience</h4>
+                    <p style="white-space: pre-wrap;">${escapeHtml(data.volunteer)}</p>
+                </div>` : ''}
+
+                ${languages.length ? `
+                <div class="tailor-block">
+                    <h4>Languages</h4>
+                    <p>${escapeHtml(languages.join(', '))}</p>
+                </div>` : ''}
+
+                ${tools.length ? `
+                <div class="tailor-block">
+                    <h4>Tools</h4>
+                    <p>${escapeHtml(tools.join(', '))}</p>
+                </div>` : ''}
 
                 <div class="tailor-block">
                     <h4>Changes Made <button class="copy-btn" data-target="changes" disabled>Copy</button></h4>

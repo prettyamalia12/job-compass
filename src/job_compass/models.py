@@ -70,19 +70,44 @@ class ResumeTailorInput(BaseModel):
     )
 
 
-class TailoredResume(BaseModel):
-    """Response: tailored resume and cover letter for a job."""
+class TailoredExperience(BaseModel):
+    """One role within a tailored resume, preserving base resume hierarchy."""
 
+    company: str = Field(..., description="Company name (never altered by tailoring)")
+    location: str = Field("", description="Company location / work mode")
+    role: str = Field(..., description="Job title held (never altered by tailoring)")
+    dates: str = Field(..., description="Employment dates (never altered by tailoring)")
+    bullets: List[str] = Field(
+        default_factory=list,
+        description="3-4 tailored bullets, clean text without source annotations",
+    )
+    is_relevant: bool = Field(
+        True,
+        description="False if the role is irrelevant to the target job — drop or minimize",
+    )
     original_bullets: List[str] = Field(
-        ..., description="Resume bullets extracted from base_resume_markdown"
+        default_factory=list,
+        description="Original bullets from the base resume, for diff/verification",
     )
-    tailored_bullets: List[str] = Field(
-        ..., description="Tailored bullets with source citations"
-    )
-    skills_section: List[str] = Field(
-        ..., description="Skills surfaced from base resume that match the job"
-    )
+
+
+class TailoredResume(BaseModel):
+    """Response: structured tailored resume and cover letter for a job."""
+
+    name: str = Field(..., description="Candidate name")
+    title: str = Field(..., description="Candidate headline/title")
+    contact: str = Field("", description="Contact line (email, site, location)")
     summary: str = Field(..., description="Tailored professional summary")
+    skills: List[str] = Field(
+        ..., description="8-12 skills surfaced from the base resume that match the job"
+    )
+    experience: List[TailoredExperience] = Field(
+        ..., description="Work experience preserving the base resume hierarchy"
+    )
+    education: str = Field("", description="Education section text")
+    volunteer: Optional[str] = Field(None, description="Volunteer experience text")
+    languages: List[str] = Field(default_factory=list, description="Languages")
+    tools: List[str] = Field(default_factory=list, description="Tools")
     cover_letter: str = Field(..., description="Honest gap-bridging cover letter")
     changes_made: List[str] = Field(
         ..., description="List of changes made to align with the job"
