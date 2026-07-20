@@ -1632,6 +1632,10 @@
             });
         }
 
+        function slugify(text) {
+            return (text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'resume';
+        }
+
         async function downloadPdf(type) {
             if (!window.currentTailoredResume) {
                 showError('No tailored resume data available.');
@@ -1643,12 +1647,14 @@
             btn.disabled = true;
 
             try {
+                const company = currentJobData && currentJobData.company ? currentJobData.company : '';
                 const resp = await fetch(`${API_BASE}/api/generate-pdf`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         tailored_resume: window.currentTailoredResume,
-                        type: type
+                        type: type,
+                        company: company
                     })
                 });
 
@@ -1657,11 +1663,15 @@
                     throw new Error(data.detail || 'PDF generation failed');
                 }
 
+                const firstName = (window.currentTailoredResume.name || '').trim().split(/\s+/)[0];
+                const typeLabel = type === 'resume' ? 'resume' : 'cover-letter';
+                const filename = `${typeLabel}-${slugify(firstName)}-${slugify(company || 'company')}.pdf`;
+
                 const blob = await resp.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `tailored_${type}_${new Date().toISOString().slice(0,10)}.pdf`;
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 a.remove();

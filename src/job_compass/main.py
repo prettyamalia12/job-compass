@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
@@ -359,6 +360,12 @@ async def verify_tailored_resume(input_data: ResumeTailorInput) -> dict[str, boo
     return {"verified": True}
 
 
+def _slugify(text: str) -> str:
+    """Lowercase hyphenated slug safe for filenames."""
+    slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    return slug or "resume"
+
+
 @app.post("/api/generate-pdf")
 async def generate_pdf_endpoint(input_data: PdfGenerateInput) -> Response:
     """Generate a PDF resume or cover letter from tailored resume data."""
@@ -371,10 +378,10 @@ async def generate_pdf_endpoint(input_data: PdfGenerateInput) -> Response:
 
     try:
         pdf_bytes = generate_pdf(input_data.tailored_resume, pdf_type)
-        filename = (
-            f"tailored_resume_{pdf_type}_"
-            f"{input_data.tailored_resume.created_at[:10].replace('-', '')}.pdf"
-        )
+        first_name = input_data.tailored_resume.name.split()[0]
+        company = input_data.company or "company"
+        type_label = "resume" if pdf_type == "resume" else "cover-letter"
+        filename = f"{type_label}-{_slugify(first_name)}-{_slugify(company)}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",

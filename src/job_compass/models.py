@@ -141,3 +141,6 @@ class PdfGenerateInput(BaseModel):
 
     tailored_resume: TailoredResume = Field(..., description="Tailored resume data")
     type: str = Field("resume", description="PDF type: resume or cover_letter")
+    company: Optional[str] = Field(
+        None, description="Target company name, used in the PDF filename"
+    )
