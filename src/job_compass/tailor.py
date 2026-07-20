@@ -1054,11 +1054,22 @@ def _skill_concept_match(skill: str, base_resume: str) -> bool:
 
 
 def _find_source_in_chunks(source: str, chunks: List[ResumeChunk]) -> bool:
-    """Check if a source citation is a substring of any chunk."""
+    """Check if a source citation is a substring of any chunk.
+
+    Both sides are normalized (markdown stripped, whitespace collapsed):
+    the LLM cites the markdown-stripped bullets it was shown, while raw
+    chunks may still contain emphasis markers like ``**11.2K MAU**``.
+    """
+    normalized = _normalize_citation(source)
     for chunk in chunks:
-        if source in chunk.text:
+        if normalized in _normalize_citation(chunk.text):
             return True
     return False
+
+
+def _normalize_citation(text: str) -> str:
+    """Strip markdown emphasis and collapse whitespace for citation checks."""
+    return re.sub(r"\s+", " ", _strip_markdown(text)).strip()
 
 
 _ANNOTATION_RE = re.compile(

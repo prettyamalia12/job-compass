@@ -41,10 +41,10 @@ Senior Product Manager with 6+ years of experience building gaming and consumer 
 ### Bitazza | Bangkok, Thailand (Remote)
 **Senior Product Manager** | Feb 2024 – Jun 2026
 
-- Owned the LiveOps and player engagement roadmap for Freedom World, growing the platform to 11.2K monthly active users through missions, quizzes, community goals, and reward systems.
-- Led the launch of Freedom Planets, designing player onboarding, progression systems, rewards, and long-term engagement mechanics that scaled to 400+ player-owned planets within three months.
-- Led the development of an AI-powered mission creation tool that reduced campaign setup time from one hour to minutes, lowering operational effort by 80%.
-- Conducted customer discovery with 15 merchants across three Thai islands, shaping a gamified tourism campaign that increased merchant discovery and app adoption.
+- Owned the LiveOps and player engagement roadmap for Freedom World, growing the platform to **11.2K monthly active users** through missions, quizzes, community goals, and reward systems.
+- Led the launch of Freedom Planets, designing player onboarding, progression systems, rewards, and long-term engagement mechanics that scaled to **400+ player-owned planets within three months**.
+- Led the development of an AI-powered mission creation tool that reduced campaign setup time from one hour to minutes, lowering operational effort by **80%**.
+- Conducted customer discovery with **15 merchants across three Thai islands**, shaping a gamified tourism campaign that increased merchant discovery and app adoption.
 
 ### Itsavirus | Bali, Indonesia (Hybrid)
 **Product Owner** | Jun 2022 – Sep 2023
