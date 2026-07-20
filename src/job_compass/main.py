@@ -1,6 +1,7 @@
 """Job Compass FastAPI application."""
 
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -11,6 +12,8 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+logger = logging.getLogger("job_compass")
 
 from job_compass.config import config
 from job_compass.models import (
@@ -209,8 +212,10 @@ async def parse_job(input_data: JobUrlInput):
         return JobParseResult(**result)
 
     except ValueError as exc:
+        logger.warning("Parse failed for %s: %s", url, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Analysis failed for %s", url)
         raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}") from exc
 
 
@@ -237,8 +242,10 @@ async def parse_job_text(text: str):
             "parsed_at": datetime.utcnow().isoformat(),
         }
     except ValueError as exc:
+        logger.warning("Text parse failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Text analysis failed")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}") from exc
 
 
@@ -272,8 +279,10 @@ async def tailor_job_resume(input_data: ResumeTailorInput):
         return tailored
 
     except ValueError as exc:
+        logger.warning("Tailoring rejected: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Tailoring failed")
         raise HTTPException(status_code=500, detail=f"Tailoring failed: {exc}") from exc
 
 
@@ -288,8 +297,10 @@ async def tailor_cover_letter(input_data: CoverLetterInput) -> dict[str, str]:
         )
         return {"cover_letter": cover_letter}
     except ValueError as exc:
+        logger.warning("Cover letter rejected: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Cover letter failed")
         raise HTTPException(status_code=500, detail=f"Cover letter failed: {exc}") from exc
 
 
@@ -328,8 +339,10 @@ async def generate_pdf_endpoint(input_data: PdfGenerateInput) -> Response:
             },
         )
     except ValueError as exc:
+        logger.warning("PDF generation rejected: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("PDF generation failed")
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {exc}") from exc
 
 
