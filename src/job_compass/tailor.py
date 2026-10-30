@@ -13,8 +13,13 @@ from openai import AsyncOpenAI
 from job_compass.config import config
 from job_compass.models import JobParseResult, TailoredExperience, TailoredResume
 
-client = AsyncOpenAI(api_key=config.openai_api_key)
+client = AsyncOpenAI(
+    api_key=config.kimi_api_key or "not-configured",
+    base_url=config.kimi_base_url,
+)
 
+# OpenAI embeddings for chunk matching. Kimi has no embeddings endpoint, so on
+# Kimi this call fails gracefully and matching falls back to keyword overlap.
 EMBEDDING_MODEL = "text-embedding-3-small"
 
 STOP_WORDS = {
@@ -868,7 +873,7 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 
 async def _get_embeddings(texts: List[str]) -> Optional[List[np.ndarray]]:
     """Fetch OpenAI embeddings for a list of texts. Returns None on failure."""
-    if not config.openai_api_key or not texts:
+    if not config.kimi_api_key or not texts:
         return None
     try:
         response = await client.embeddings.create(

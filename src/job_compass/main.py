@@ -26,6 +26,7 @@ from job_compass.models import (
     ResumeTailorInput,
     TailoredResume,
 )
+from job_compass import mock
 from job_compass.parser import parse_job_description
 from job_compass.pdf_generator import generate_pdf
 from job_compass.scorer import score_job_fit
@@ -34,6 +35,12 @@ from job_compass.tailor import (
     generate_cover_letter,
     make_cache_key,
     tailor_resume,
+)
+
+# Mock mode: forced on with MOCK_MODE=1, otherwise auto-enabled when no API key.
+MOCK_MODE = (
+    os.getenv("MOCK_MODE", "").lower() in ("1", "true", "yes")
+    or not config.kimi_api_key
 )
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "job_compass.db")
@@ -107,7 +114,9 @@ async def lifespan(app: FastAPI):
     print(f"   Scorer: {config.models.scorer_model}")
     print(f"   Generator: {config.models.generator_model}")
     print(f"   DB: {DB_PATH}")
-    print(f"   API key: {'✅ Set' if config.openai_api_key else '❌ NOT SET — set OPENAI_API_KEY in .env'}")
+    print(f"   API key: {'✅ Set' if config.kimi_api_key else '❌ NOT SET — set KIMI_API_KEY in .env'}")
+    if MOCK_MODE:
+        print("   🎭 MOCK MODE: LLM calls are mocked — set KIMI_API_KEY to go live")
     yield
     print("👋 Shutting down...")
 
@@ -209,6 +218,7 @@ async def health():
         "status": "ok",
         "version": "0.1.0",
         "profile": config.profile.name,
+        "mock_mode": MOCK_MODE,
     }
 
 
@@ -243,9 +253,14 @@ async def parse_job(input_data: JobUrlInput):
     url = str(input_data.url)
 
     try:
-        raw_text = await scrape_job_page(url)
-        parsed = await parse_job_description(raw_text)
-        scored = await score_job_fit(parsed, config.profile.__dict__)
+        if MOCK_MODE:
+            raw_text = mock.mock_scrape_job_page(url)
+            parsed = mock.mock_parse_job_description(raw_text)
+            scored = mock.mock_score_job_fit(parsed, config.profile.__dict__)
+        else:
+            raw_text = await scrape_job_page(url)
+            parsed = await parse_job_description(raw_text)
+            scored = await score_job_fit(parsed, config.profile.__dict__)
 
         result = {
             **parsed,
@@ -276,8 +291,12 @@ async def parse_job_text(text: str):
         )
 
     try:
-        parsed = await parse_job_description(text)
-        scored = await score_job_fit(parsed, config.profile.__dict__)
+        if MOCK_MODE:
+            parsed = mock.mock_parse_job_description(text)
+            scored = mock.mock_score_job_fit(parsed, config.profile.__dict__)
+        else:
+            parsed = await parse_job_description(text)
+            scored = await score_job_fit(parsed, config.profile.__dict__)
 
         return {
             **parsed,
@@ -312,12 +331,18 @@ async def tailor_job_resume(input_data: ResumeTailorInput):
         if cached:
             return cached
 
-        tailored = await tailor_resume(
-            base_resume,
-            job_data,
-            tone,
-            max_length_pages,
-            input_data.gap_bridges,
+        tailored = (
+            mock.mock_tailor_resume(
+                base_resume, job_data, tone, max_length_pages, input_data.gap_bridges
+            )
+            if MOCK_MODE
+            else await tailor_resume(
+                base_resume,
+                job_data,
+                tone,
+                max_length_pages,
+                input_data.gap_bridges,
+            )
         )
         await _save_tailored_resume(job_url, base_resume_hash, job_data, tailored)
         await _set_setting("base_resume", base_resume)
@@ -335,10 +360,14 @@ async def tailor_job_resume(input_data: ResumeTailorInput):
 async def tailor_cover_letter(input_data: CoverLetterInput) -> dict[str, str]:
     """Generate a standalone gap-bridging cover letter."""
     try:
-        cover_letter = await generate_cover_letter(
-            input_data.job_data,
-            input_data.base_resume_markdown,
-            input_data.tone,
+        cover_letter = (
+            mock.mock_cover_letter(input_data.job_data, input_data.base_resume_markdown, input_data.tone)
+            if MOCK_MODE
+            else await generate_cover_letter(
+                input_data.job_data,
+                input_data.base_resume_markdown,
+                input_data.tone,
+            )
         )
         await _set_setting("base_resume", input_data.base_resume_markdown)
         return {"cover_letter": cover_letter}

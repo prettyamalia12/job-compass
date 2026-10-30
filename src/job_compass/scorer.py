@@ -7,7 +7,10 @@ from openai import AsyncOpenAI
 
 from job_compass.config import config
 
-client = AsyncOpenAI(api_key=config.openai_api_key)
+client = AsyncOpenAI(
+    api_key=config.kimi_api_key or "not-configured",
+    base_url=config.kimi_base_url,
+)
 
 SCORE_SYSTEM_PROMPT = """You are a senior product director evaluating whether a candidate should apply for a job.
 

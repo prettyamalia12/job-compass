@@ -27,7 +27,7 @@ pip install -e ".[dev]"
 
 # 4. Configure
 cp .env.example .env
-# Edit .env with your OpenAI API key
+# Edit .env with your Kimi (Moonshot AI) API key — https://platform.moonshot.ai
 
 # 5. Customize your profile
 # Edit src/job_compass/config.py → YOUR_PROFILE
@@ -58,8 +58,8 @@ job-compass/
 │   ├── config.py          # Your profile + model config
 │   ├── models.py          # Pydantic schemas
 │   ├── scraper.py         # HTTP scraping
-│   ├── parser.py          # LLM parsing (GPT-4.1 Nano)
-│   ├── scorer.py          # LLM scoring (GPT-4o-mini)
+│   ├── parser.py          # LLM parsing (Kimi K2)
+│   ├── scorer.py          # LLM scoring (Kimi K2)
 │   └── main.py            # FastAPI app
 ├── static/
 │   └── index.html         # Frontend (no build step)
@@ -74,8 +74,8 @@ job-compass/
 
 | Task | Model | Cost per Job |
 |---|---|---|
-| Parse | GPT-4.1 Nano | ~$0.001 |
-| Score | GPT-4o-mini | ~$0.003 |
+| Parse | Kimi K2 | ~$0.001 |
+| Score | Kimi K2 | ~$0.003 |
 | **Total** | | **~$0.004 per job** |
 
 **50 jobs/day ≈ $6/month**
@@ -100,8 +100,8 @@ Profile(
 In `config.py` → `ModelConfig`:
 
 ```python
-parser_model="gpt-4o-mini"      # Higher quality parsing
-scorer_model="gpt-4o"            # Higher quality scoring (10x cost)
+parser_model="moonshot-v1-8k"         # Cheaper parsing (legacy Moonshot model)
+scorer_model="moonshot-v1-32k"        # Larger context for scoring
 ```
 
 ## Development

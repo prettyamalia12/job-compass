@@ -83,27 +83,31 @@ class Profile:
 class ModelConfig:
     """LLM model selection and pricing (as of July 2026)."""
 
-    # GPT-4.1 Nano: $0.10/$0.40 per 1M tokens — cheapest capable parser
-    parser_model: str = "gpt-4.1-nano"
-    parser_input_cost: float = 0.10  # per 1M tokens
-    parser_output_cost: float = 0.40  # per 1M tokens
+    # Kimi K2 (Moonshot AI): $0.60/$2.50 per 1M tokens — fast, cheap, JSON-capable
+    parser_model: str = "kimi-k2-0905-preview"
+    parser_input_cost: float = 0.60  # per 1M tokens
+    parser_output_cost: float = 2.50  # per 1M tokens
 
-    # GPT-4o-mini: $0.15/$0.60 per 1M tokens — best cost/reasoning for scoring
-    scorer_model: str = "gpt-4o-mini"
-    scorer_input_cost: float = 0.15
-    scorer_output_cost: float = 0.60
+    # Kimi K2 (Moonshot AI): strong reasoning for scoring at the same price
+    scorer_model: str = "kimi-k2-0905-preview"
+    scorer_input_cost: float = 0.60
+    scorer_output_cost: float = 2.50
 
-    # GPT-4.1 Mini: $0.40/$1.60 per 1M tokens — reserve for resume generation
-    generator_model: str = "gpt-4.1-mini"
-    generator_input_cost: float = 0.40
-    generator_output_cost: float = 1.60
+    # Kimi K2 (Moonshot AI): resume/cover-letter generation
+    generator_model: str = "kimi-k2-0905-preview"
+    generator_input_cost: float = 0.60
+    generator_output_cost: float = 2.50
 
 
 @dataclass(frozen=True)
 class AppConfig:
     """Application configuration."""
 
-    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    # Kimi (Moonshot AI) — OpenAI-compatible API
+    kimi_api_key: str = field(default_factory=lambda: os.getenv("KIMI_API_KEY", ""))
+    kimi_base_url: str = field(
+        default_factory=lambda: os.getenv("KIMI_BASE_URL", "https://api.moonshot.ai/v1")
+    )
     profile: Profile = field(default_factory=Profile)
     models: ModelConfig = field(default_factory=ModelConfig)
     max_scrape_chars: int = 12_000
